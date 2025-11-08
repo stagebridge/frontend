@@ -1,6 +1,22 @@
-/* Tailwind v4 권장 */
+/* ⛔ 기존
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+*/
+
+/* ✅ v4 방식 */
 @import "tailwindcss";
 
-html, body, #root { height: 100%; }
-body { margin: 0; font-family: system-ui, Avenir, Helvetica, Arial, sans-serif; }
-/* Vite 템플릿의 body { display:flex; place-items:center } 같은 건 넣지 마세요 */
+/* 전역 라이트/다크 기본색 */
+@layer base {
+  body {
+    @apply bg-white text-slate-900;
+  }
+  .dark body {
+    @apply bg-neutral-900 text-slate-100;
+  }
+}
+
+/* 스크롤바 숨김 유틸 */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; height: 0; }
