@@ -1,52 +1,55 @@
-// src/pages/mypage/SidebarNav.tsx
-import { scrollToId } from "../../app/utils/scrollToId";
-
-// 간단한 classnames 유틸 (false/null/undefined 무시)
-function cx(...args: Array<string | false | null | undefined>) {
-  return args.filter(Boolean).join(" ");
-}
+import React from "react";
 
 type Item = { id: string; label: string };
 
 export default function SidebarNav({
   items,
   active,
-  className,
 }: {
   items: Item[];
-  active: string;
-  className?: string;
+  active?: string | null;
 }) {
+  const jump = (id: string) => {
+    // 클릭 즉시 활성값도 맞춰 주고
+    // (IntersectionObserver가 늦게 반응해도 하이라이트가 맞게 보이도록)
+    // setActive를 밖에서 못 쓰니, location hash를 살짝 바꿔 강제 트리거
+    history.replaceState(null, "", `#${id}`);
+
+    const el = document.getElementById(id);
+    if (!el) return;
+    // 오프셋 계산은 SectionCard의 scroll-mt가 처리하므로 순정 스크롤
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <aside
-      className={cx(
-        // 카드 스타일
-        "rounded-xl border bg-white/70 p-3 dark:border-neutral-800 dark:bg-neutral-900/60",
-        // 뷰포트 안에서 자체 스크롤
-        "max-h-[calc(100vh-96px)] overflow-auto", // 96px ≈ 헤더 높이 (MyPage.tsx의 sticky top과 함께 조정)
-        className
-      )}
+      className={[
+        "hidden md:block",
+        // 헤더 높이 + 8px 버퍼를 전역으로 통일
+        "sticky top-[calc(var(--header-h)+8px)]",
+        "max-h-[calc(100vh-var(--header-h)-8px)] overflow-auto",
+        "h-fit self-start rounded-xl border p-3 dark:border-neutral-800",
+      ].join(" ")}
     >
-      <ul className="space-y-1">
+      <nav className="flex flex-col gap-1 pr-1">
         {items.map((it) => {
-          const is = it.id === active;
+          const isActive = active === it.id;
           return (
-            <li key={it.id}>
-              <button
-                onClick={() => scrollToId(it.id)}
-                className={cx(
-                  "w-full rounded-lg px-3 py-2 text-left text-sm transition",
-                  is
-                    ? "bg-indigo-600 text-white"
-                    : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                )}
-              >
-                {it.label}
-              </button>
-            </li>
+            <button
+              key={it.id}
+              onClick={() => jump(it.id)}
+              className={[
+                "w-full rounded-lg px-3 py-2 text-left text-sm",
+                isActive
+                  ? "bg-indigo-600 text-white"
+                  : "hover:bg-neutral-50 dark:hover:bg-neutral-800",
+              ].join(" ")}
+            >
+              {it.label}
+            </button>
           );
         })}
-      </ul>
+      </nav>
     </aside>
   );
 }

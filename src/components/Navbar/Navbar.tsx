@@ -46,7 +46,7 @@ export default function Navbar() {
             <NotificationIcon />
 
             {/* 예매하기 (텍스트 링크) */}
-            <Link to="/reserve" className={textLinkClass} aria-label="예매하기 페이지로 이동">
+            <Link to="/search?page=1" className={textLinkClass} aria-label="예매하기 페이지로 이동">
               예매하기
             </Link>
 
@@ -87,7 +87,8 @@ export default function Navbar() {
 
             {/* 예매하기/마이페이지: 버튼이 아닌 텍스트 링크로 표기 */}
             <li className="flex items-center justify-end gap-4 text-sm">
-              <Link to="/reserve" onClick={handleNav} className={textLinkClass}>
+              <Link to="/search?page=1" onClick={handleNav}  className={textLinkClass} 
+                aria-label="예매하기 페이지로 이동">
                 예매하기
               </Link>
               <Link to="/me" onClick={handleNav} className={textLinkClass}>

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import type { Genre, Region } from "@/types/ticket";
+import type { Genre, Region } from "../../types/ticket";
+
 
 type Props = {
   initKeyword?: string;
