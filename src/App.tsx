@@ -6,7 +6,7 @@ export default function App() {
     <>
       <Navbar />
       <main className="mx-auto max-w-7xl px-4 py-10">
-        <Outlet /> {/* 자식 라우트가 여기 그려집니다 */}
+        <Outlet />
       </main>
     </>
   );

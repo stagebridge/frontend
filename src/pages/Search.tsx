@@ -1,13 +1,31 @@
-import { useMemo } from "react";
-import { useQueryParams } from "@/hooks/useQueryParams";
-import FiltersSidebar from "@/components/Search/FiltersSidebar";
-import ResultTabs from "@/components/Search/ResultTabs";
-import TicketCard from "@/components/common/Card/TicketCard";
-import Pagination from "@/components/common/Pagination";
-import { TICKETS } from "@/mocks/tickets.mock";
-import type { Genre, Region, Ticket } from "@/types/ticket";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryParams } from "../hooks/useQueryParams";
+import FiltersSidebar from "../components/Search/FiltersSidebar";
+import ResultTabs from "../components/Search/ResultTabs";
+import ConcertCard from "../components/common/ConcertCard";
+import Pagination from "../components/common/Pagination";
+
+import type { Genre, Region } from "../types/ticket";
+import {
+  fetchPerformances,
+  type PerformanceSummary,
+} from "../api/performances";
 
 const PER_PAGE = 12;
+
+// Search UI에서 사용하는 Genre → 공연 API 장르 문자열과 대략 매핑
+const matchesGenre = (p: PerformanceSummary, genre: Genre): boolean => {
+  const g = (p.genre || "").toLowerCase();
+
+  switch (genre) {
+    case "CLASSIC":
+      // 클래식
+      return g.includes("클래식") || g.includes("서양음악");
+    default:
+      // 나머지는 일단 대중음악 계열로 묶어서 필터
+      return g.includes("대중") || g.includes("발라드") || g.includes("록");
+  }
+};
 
 export default function Search() {
   const { get, setMany } = useQueryParams<{
@@ -34,46 +52,101 @@ export default function Search() {
     | "priceDesc";
   const page = Math.max(1, parseInt(get("page") || "1", 10) || 1);
 
-  // 실데이터 연동 전: 클라이언트 필터링
-  const filtered = useMemo(() => {
-    let rows: Ticket[] = TICKETS;
+  // ✅ 실제 공연 데이터(API) 상태
+  const [items, setItems] = useState<PerformanceSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // 마운트 시 한 번만 공연 목록 로드
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const data = await fetchPerformances();
+        if (!cancelled) {
+          setItems(data ?? []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          const msg =
+            e instanceof Error ? e.message : "공연 정보를 불러오는 중 오류가 발생했습니다.";
+          setError(msg);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ✅ 클라이언트 필터링 (이제 더미 TICKETS 대신 API 결과 사용)
+  const filtered = useMemo(() => {
+    let rows: PerformanceSummary[] = items;
+
+    // 검색어
     if (q) {
       const keyword = q.toLowerCase();
       rows = rows.filter(
-        (t) =>
-          t.title.toLowerCase().includes(keyword) ||
-          (t.subTitle?.toLowerCase().includes(keyword) ?? false) ||
-          t.venue.toLowerCase().includes(keyword)
+        (p) =>
+          p.name.toLowerCase().includes(keyword) ||
+          (p.area ?? "").toLowerCase().includes(keyword) ||
+          (p.genre ?? "").toLowerCase().includes(keyword),
       );
     }
-    if (region) rows = rows.filter((t) => t.region === region);
-    if (genre) rows = rows.filter((t) => t.genre === genre);
-    if (start) rows = rows.filter((t) => t.dateStart >= start);
-    if (end) rows = rows.filter((t) => (t.dateEnd ?? t.dateStart) <= end);
 
+    // 지역 필터
+    if (region) {
+      // 현재는 한국 공연만 있어서,
+      // JAPAN 선택 시에는 데이터가 없다고 보는 방식으로 처리.
+      if (region === "JAPAN") {
+        rows = [];
+      } else {
+        // KOREA 인 경우는 그대로 둠 (필요하면 area 에서 "서울/부산" 등으로 세분화 가능)
+        rows = rows;
+      }
+    }
+
+    // 장르 필터
+    if (genre) {
+      rows = rows.filter((p) => matchesGenre(p, genre));
+    }
+
+    // 날짜(start/end)는 아직 Summary에 명확한 날짜 필드가 없어서
+    // 우선 필터링은 보류 (추후 startDate/endDate 필드가 생기면 여기서 처리)
+    // if (start) ...
+    // if (end) ...
+
+    // 정렬
     switch (sort) {
-      case "latest":
-        rows = [...rows].sort((a, b) => (b.dateStart > a.dateStart ? 1 : -1));
+      case "latest": {
+        // 최신순: period 문자열이 있으면 그걸 기준으로, 없으면 id 기준
+        rows = [...rows].sort((a, b) => (b.period > a.period ? 1 : -1));
         break;
-      case "priceAsc":
-        rows = [...rows].sort(
-          (a, b) => (a.priceJPY ?? a.priceKRW ?? 0) - (b.priceJPY ?? b.priceKRW ?? 0)
-        );
-        break;
-      case "priceDesc":
-        rows = [...rows].sort(
-          (a, b) => (b.priceJPY ?? b.priceKRW ?? 0) - (a.priceJPY ?? a.priceKRW ?? 0)
-        );
-        break;
-      case "popular":
-        // 더미: id 문자열 길이로 가짜 정렬
+      }
+      case "popular": {
+        // 아직 별도의 인기 지표가 없으므로 임시로 id 길이로 정렬
         rows = [...rows].sort((a, b) => b.id.length - a.id.length);
         break;
+      }
+      case "priceAsc":
+      case "priceDesc": {
+        // 가격 정보가 아직 없으므로 정렬만 유지 (실제 값 변화는 없음)
+        rows = [...rows];
+        break;
+      }
     }
 
     return rows;
-  }, [q, region, genre, start, end, sort]);
+  }, [items, q, region, genre, start, end, sort]);
 
   const total = filtered.length;
   const startIndex = (page - 1) * PER_PAGE;
@@ -91,7 +164,7 @@ export default function Search() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-6">
-      {/* 상단 배너(더미) */}
+      {/* 상단 배너(더미 이미지지만 UI용이라 그대로 둬도 무방) */}
       <div className="mb-6 overflow-hidden rounded-2xl">
         <img
           className="h-44 w-full object-cover md:h-56"
@@ -129,11 +202,27 @@ export default function Search() {
             {start && <> · {start}~{end || "…"}</>}
           </div>
 
+          {/* 에러 메시지 */}
+          {error && (
+            <p className="mb-2 text-sm text-red-500">
+              공연 정보를 불러오는 중 오류가 발생했습니다: {error}
+            </p>
+          )}
+
           {/* 그리드 */}
-          {pageRows.length ? (
+          {loading ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {pageRows.map((t) => (
-                <TicketCard key={t.id} ticket={t} />
+              {Array.from({ length: PER_PAGE }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-48 animate-pulse rounded-xl bg-slate-200/60 dark:bg-neutral-800"
+                />
+              ))}
+            </div>
+          ) : pageRows.length ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {pageRows.map((p) => (
+                <ConcertCard key={p.id} item={p} />
               ))}
             </div>
           ) : (
