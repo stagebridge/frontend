@@ -1,55 +1,49 @@
-import React from "react";
+import type { Dispatch, SetStateAction } from "react";
+import { useTranslation } from "react-i18next";
 
-type Item = { id: string; label: string };
+export type MyPageSectionKey = "profile" | "tickets" | "settings" | "support";
 
-export default function SidebarNav({
-  items,
-  active,
-}: {
-  items: Item[];
-  active?: string | null;
-}) {
-  const jump = (id: string) => {
-    // 클릭 즉시 활성값도 맞춰 주고
-    // (IntersectionObserver가 늦게 반응해도 하이라이트가 맞게 보이도록)
-    // setActive를 밖에서 못 쓰니, location hash를 살짝 바꿔 강제 트리거
-    history.replaceState(null, "", `#${id}`);
+type Props = {
+  active: MyPageSectionKey;
+  setActive: Dispatch<SetStateAction<MyPageSectionKey>>;
+};
 
-    const el = document.getElementById(id);
-    if (!el) return;
-    // 오프셋 계산은 SectionCard의 scroll-mt가 처리하므로 순정 스크롤
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+export default function SidebarNav({ active, setActive }: Props) {
+  const { t } = useTranslation();
+
+  const items: Array<{ key: MyPageSectionKey; label: string }> = [
+    { key: "profile", label: t("mypage.nav.profile") },
+    { key: "tickets", label: t("mypage.nav.tickets") },
+    { key: "settings", label: t("mypage.nav.settings") },
+    { key: "support", label: t("mypage.nav.support") },
+  ];
 
   return (
-    <aside
-      className={[
-        "hidden md:block",
-        // 헤더 높이 + 8px 버퍼를 전역으로 통일
-        "sticky top-[calc(var(--header-h)+8px)]",
-        "max-h-[calc(100vh-var(--header-h)-8px)] overflow-auto",
-        "h-fit self-start rounded-xl border p-3 dark:border-neutral-800",
-      ].join(" ")}
-    >
-      <nav className="flex flex-col gap-1 pr-1">
+    <nav className="sb-surface-soft p-4">
+      <p className="mb-3 text-xs font-semibold sb-text-muted">
+        {t("mypage.nav.title")}
+      </p>
+
+      <ul className="space-y-2">
         {items.map((it) => {
-          const isActive = active === it.id;
+          const isActive = active === it.key;
           return (
-            <button
-              key={it.id}
-              onClick={() => jump(it.id)}
-              className={[
-                "w-full rounded-lg px-3 py-2 text-left text-sm",
-                isActive
-                  ? "bg-indigo-600 text-white"
-                  : "hover:bg-neutral-50 dark:hover:bg-neutral-800",
-              ].join(" ")}
-            >
-              {it.label}
-            </button>
+            <li key={it.key}>
+              <button
+                type="button"
+                onClick={() => setActive(it.key)}
+                className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                  isActive
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "text-slate-700 hover:bg-black/5 dark:text-slate-200 dark:hover:bg-white/10"
+                }`}
+              >
+                {it.label}
+              </button>
+            </li>
           );
         })}
-      </nav>
-    </aside>
+      </ul>
+    </nav>
   );
 }

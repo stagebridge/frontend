@@ -1,24 +1,123 @@
-/* ⛔ 기존
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-*/
-
-/* ✅ v4 방식 */
+/* Tailwind v4 기본 로드 */
 @import "tailwindcss";
 
-/* 전역 라이트/다크 기본색 */
+/* =========================
+   Base (전역 라이트/다크)
+   ========================= */
 @layer base {
+  html {
+    @apply antialiased;
+  }
+
   body {
     @apply bg-white text-slate-900;
   }
+
   .dark body {
+    @apply bg-neutral-950 text-slate-100;
+  }
+
+  /* 링크 */
+  a {
+    @apply text-slate-700 hover:text-slate-900;
+  }
+
+  .dark a {
+    @apply text-slate-200 hover:text-white;
+  }
+
+  /* 입력 요소 기본 */
+  input,
+  select,
+  textarea {
+    @apply text-slate-900;
+  }
+
+  .dark input,
+  .dark select,
+  .dark textarea {
     @apply bg-neutral-900 text-slate-100;
+  }
+
+  ::placeholder {
+    @apply text-slate-400;
+  }
+
+  .dark ::placeholder {
+    @apply text-slate-500;
+  }
+
+  hr {
+    @apply border-slate-200;
+  }
+
+  .dark hr {
+    @apply border-neutral-800;
   }
 }
 
-:root { --header-h: 88px; }
+/* =========================
+   Components (공통 UI)
+   ========================= */
+@layer components {
+  /* 공통 Surface (카드, 박스) */
+  .sb-surface {
+    @apply rounded-2xl border bg-white text-slate-900 shadow-sm;
+    @apply dark:border-neutral-800 dark:bg-neutral-900 dark:text-slate-100;
+  }
 
-/* 스크롤바 숨김 유틸 */
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-.no-scrollbar::-webkit-scrollbar { display: none; height: 0; }
+  /* 약한 Surface (필터, 보조 박스) */
+  .sb-surface-soft {
+    @apply rounded-2xl border bg-slate-50 text-slate-900;
+    @apply dark:border-neutral-800 dark:bg-neutral-950 dark:text-slate-100;
+  }
+
+  /* 기본 Primary 버튼 */
+  .sb-btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold;
+    @apply bg-black text-white hover:opacity-90;
+    @apply dark:bg-white dark:text-black;
+  }
+
+  /* Outline 버튼 */
+  .sb-btn-outline {
+    @apply inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-semibold;
+    @apply border-slate-200 text-slate-700 hover:bg-black/5;
+    @apply dark:border-neutral-700 dark:text-slate-200 dark:hover:bg-white/10;
+  }
+
+  /* 공통 Input */
+  .sb-input {
+    @apply w-full rounded-lg border px-3 py-2 text-sm outline-none transition;
+    @apply border-slate-200 bg-white text-slate-900 placeholder:text-slate-400;
+    @apply focus:ring-2 focus:ring-sky-500 focus:border-slate-300;
+    @apply dark:border-neutral-700 dark:bg-neutral-900 dark:text-slate-100 dark:placeholder:text-slate-500;
+  }
+
+  /* 보조 텍스트 */
+  .sb-text-muted {
+    @apply text-slate-600 dark:text-slate-400;
+  }
+
+  .sb-text-subtle {
+    @apply text-slate-500 dark:text-slate-500;
+  }
+}
+
+/* =========================
+   Utilities
+   ========================= */
+:root {
+  --header-h: 88px;
+}
+
+/* 스크롤바 숨김 */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}

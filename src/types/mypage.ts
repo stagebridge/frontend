@@ -1,3 +1,4 @@
+// src/types/mypage.ts
 export type AlbumItem = {
   id: string;
   title: string;
@@ -5,10 +6,24 @@ export type AlbumItem = {
   tag?: string; // 예: "구매", "보관"
 };
 
+export type Profile = {
+  nickname: string;
+  email: string;
+  phone?: string;
+  language: "ko" | "ja" | "en";
+};
+
+export type NotificationPrefs = {
+  email: boolean;
+  sms: boolean;
+  marketing: boolean;
+  remindBeforeShow: boolean;
+};
+
 export type RegionLanguage = {
   regionKR: "KOREA" | "NONE";
   regionJP: "JAPAN" | "NONE";
-  languagePref: "ko" | "ja";
+  languagePref: "ko" | "ja" | "en";
 };
 
 export type MySettings = {
@@ -19,6 +34,6 @@ export type MySettings = {
     showProfilePublic: boolean;
     showWishlist: boolean;
   };
-  albums?: AlbumItem[];               // ⬅︎ 추가
-  regionLang?: RegionLanguage;        // ⬅︎ 추가
+  albums?: AlbumItem[];
+  regionLang?: RegionLanguage;
 };

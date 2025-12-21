@@ -1,95 +1,140 @@
-// src/pages/Signup.tsx
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { FormEvent, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Signup() {
-  const nav = useNavigate();
+  const navigate = useNavigate();
   const { signup } = useAuth();
 
-  const [id, setId] = useState("");
-  const [password, setPw] = useState("");
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setErr(null);
+    setError(null);
 
-    if (!id.trim()) return setErr("ID를 입력해 주세요.");
-    if (password.length < 6) return setErr("비밀번호는 6자 이상이어야 합니다.");
-    if (!/^\S+@\S+\.\S+$/.test(email)) return setErr("이메일 형식이 올바르지 않습니다.");
-    if (!nickname.trim()) return setErr("닉네임을 입력해 주세요.");
+    const safeEmail = email.trim();
+    const safeNickname = nickname.trim();
 
-    setLoading(true);
+    if (!safeEmail || !safeNickname || !password) {
+      setError("이메일, 닉네임, 비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(safeEmail)) {
+      setError("이메일 형식이 올바르지 않습니다.");
+      return;
+    }
+    if (safeNickname.length < 2 || safeNickname.length > 15) {
+      setError("닉네임은 two~fifteen 글자로 입력해 주세요.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("비밀번호는 eight 글자 이상으로 입력해 주세요.");
+      return;
+    }
+
     try {
-      await signup({ id, password, email, nickname });
-      nav("/", { replace: true });
-    } catch (e: any) {
-      setErr(e?.message ?? "회원가입에 실패했습니다.");
+      setSubmitting(true);
+
+      /**
+       * ✅ 현재 프로젝트 정책:
+       * - 로그인은 { id, password } 구조이며, 로그인 폼에서 이메일을 id로 사용합니다.
+       * - 회원가입도 동일하게 "email을 id로 사용"하면 일관성이 생깁니다.
+       */
+      await signup({
+        id: safeEmail,
+        email: safeEmail,
+        nickname: safeNickname,
+        password,
+      });
+
+      // 가입 직후 자동 로그인 상태가 되므로, 마이페이지로 이동
+      navigate("/mypage", { replace: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "회원가입에 실패했습니다.";
+      setError(msg);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-16">
-      <h1 className="mb-10 text-center text-5xl font-black tracking-tight">StageBridge</h1>
-      <form onSubmit={onSubmit} className="mx-auto max-w-xl rounded-2xl border p-8 shadow-sm dark:border-neutral-800">
-        <h2 className="mb-6 text-xl font-semibold">Create Account</h2>
+    <main className="mx-auto max-w-md px-4 py-12">
+      <div className="sb-surface p-6">
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+          회원가입
+        </h1>
+        <p className="mt-1 text-sm sb-text-muted">기본 정보를 입력해 계정을 생성합니다.</p>
 
-        <label className="mb-2 block text-sm font-medium">ID</label>
-        <input
-          value={id}
-          onChange={(e) => setId(e.target.value)}
-          placeholder="아이디"
-          className="mb-4 w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
-        />
+        {error ? (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </div>
+        ) : null}
 
-        <label className="mb-2 mt-2 block text-sm font-medium">Password</label>
-        <div className="mb-4 flex items-stretch gap-2">
-          <input
-            type={showPw ? "text" : "password"}
-            value={password}
-            onChange={(e) => setPw(e.target.value)}
-            placeholder="비밀번호(6자 이상)"
-            className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
-          />
-          <button type="button" onClick={() => setShowPw((v) => !v)} className="shrink-0 rounded-lg border px-3 text-sm dark:border-neutral-700">
-            {showPw ? "숨김" : "표시"}
+        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <div>
+            <label className="mb-2 block text-xs font-semibold sb-text-muted" htmlFor="signup-email">
+              이메일
+            </label>
+            <input
+              id="signup-email"
+              type="email"
+              className="sb-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="example@email.com"
+              autoComplete="email"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-semibold sb-text-muted" htmlFor="signup-nickname">
+              닉네임
+            </label>
+            <input
+              id="signup-nickname"
+              type="text"
+              className="sb-input"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="닉네임"
+              autoComplete="nickname"
+            />
+            <p className="mt-2 text-xs sb-text-subtle">two~fifteen 글자, 공백 없이 권장합니다.</p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-semibold sb-text-muted" htmlFor="signup-password">
+              비밀번호
+            </label>
+            <input
+              id="signup-password"
+              type="password"
+              className="sb-input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="비밀번호 (eight 글자 이상)"
+              autoComplete="new-password"
+            />
+          </div>
+
+          <button type="submit" className="sb-btn-primary w-full" disabled={submitting}>
+            {submitting ? "가입 중" : "회원가입"}
           </button>
-        </div>
 
-        <label className="mb-2 mt-2 block text-sm font-medium">Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="SB@email.com"
-          className="mb-4 w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
-        />
-
-        <label className="mb-2 mt-2 block text-sm font-medium">Nickname</label>
-        <input
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          placeholder="표시될 닉네임"
-          className="mb-4 w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
-        />
-
-        {err && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{err}</p>}
-
-        <button disabled={loading} className="mt-2 w-full rounded-lg bg-black py-3 text-white hover:opacity-90 disabled:opacity-60 dark:bg-white dark:text-black">
-          {loading ? "가입 중..." : "Sign In"}
-        </button>
-
-        <div className="mt-4 text-right text-sm">
-          <Link to="/login" className="underline">이미 계정이 있으신가요? Login</Link>
-        </div>
-      </form>
+          <div className="text-sm sb-text-muted">
+            이미 계정이 있으신가요?{" "}
+            <Link className="font-semibold hover:underline" to="/login">
+              로그인
+            </Link>
+          </div>
+        </form>
+      </div>
     </main>
   );
 }

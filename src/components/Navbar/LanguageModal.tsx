@@ -1,6 +1,7 @@
 // src/components/Navbar/LanguageModal.tsx
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   anchorRef: React.RefObject<HTMLElement | null>;
@@ -15,109 +16,89 @@ export default function LanguageModal({
   onPointerEnter,
   onPointerLeave,
 }: Props) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState<React.CSSProperties>({ visibility: "hidden" });
+  const { i18n, t } = useTranslation();
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
-  const setLang = (code: "ko" | "ja" | "en") => {
-    localStorage.setItem("sb_lang", code);
-    document.documentElement.lang = code;
-    onClose();
-    // i18n 사용 시: i18next.changeLanguage(code)
-  };
+  const [open, setOpen] = useState(false);
 
-  // ESC로 닫기
+  useLayoutEffect(() => setOpen(true), []);
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    const onDocDown = (e: MouseEvent) => {
+      const panel = panelRef.current;
+      const anchor = anchorRef.current;
+      if (!panel) return;
 
-  // 위치 계산 + 충돌 보정
-  const place = () => {
-    const anchor = anchorRef.current;
-    const panel = panelRef.current;
-    if (!anchor || !panel) return;
+      const target = e.target as Node;
+      const inPanel = panel.contains(target);
+      const inAnchor = anchor ? anchor.contains(target) : false;
 
-    const width = Math.max(220, Math.min(window.innerWidth * 0.24, 320));
-    panel.style.width = `${width}px`;
+      if (!inPanel && !inAnchor) onClose();
+    };
 
-    const rect = anchor.getBoundingClientRect();
-    const margin = 8;
-    const desiredTop = rect.bottom + margin;
-    const desiredLeft = rect.right - width;
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, [anchorRef, onClose]);
 
-    const height = panel.offsetHeight || 240;
-    let top = desiredTop;
-    let left = desiredLeft;
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    if (left + width > vw - margin) left = vw - width - margin;
-    if (left < margin) left = margin;
-    if (top + height > vh - margin) top = rect.top - height - margin;
-    if (top < margin) top = margin;
-
-    setStyle({ position: "fixed", top, left, zIndex: 1000, visibility: "visible" });
+  const setLang = async (code: "ko" | "ja" | "en") => {
+    await i18n.changeLanguage(code); // ✅ 전역 변경
+    onClose();
   };
 
-  useLayoutEffect(() => {
-    requestAnimationFrame(place);
-    const onScrollOrResize = () => place();
-    window.addEventListener("resize", onScrollOrResize);
-    window.addEventListener("scroll", onScrollOrResize, true);
-    return () => {
-      window.removeEventListener("resize", onScrollOrResize);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const rect = anchorRef.current?.getBoundingClientRect();
+  const style: React.CSSProperties = rect
+    ? { position: "fixed", top: rect.bottom + 8, left: rect.left, zIndex: 50 }
+    : { position: "fixed", top: 64, left: 16, zIndex: 50 };
+
+  if (!open) return null;
 
   return createPortal(
     <div
       ref={panelRef}
       style={style}
-      role="menu"
-      aria-label="언어 선택"
-      // 🔽 버튼↔패널 사이 이동 시 열림 유지
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
-      className="rounded-2xl border bg-white p-3 shadow-xl
-                 dark:border-neutral-800 dark:bg-neutral-900"
+      className="w-[260px] rounded-xl border bg-white p-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+      role="menu"
+      aria-label="language-menu"
     >
-      <ul className="max-h-[min(60vh,420px)] overflow-auto text-sm">
+      <ul className="flex flex-col gap-1">
         <li>
           <button
+            type="button"
             onClick={() => setLang("ko")}
             className="w-full rounded-md px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/5"
           >
-            한국어
+            {t("language.ko")}
           </button>
         </li>
         <li>
           <button
+            type="button"
             onClick={() => setLang("ja")}
             className="w-full rounded-md px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/5"
           >
-            日本語
+            {t("language.ja")}
           </button>
         </li>
         <li>
           <button
+            type="button"
             onClick={() => setLang("en")}
             className="w-full rounded-md px-3 py-2 text-left hover:bg-black/5 dark:hover:bg-white/5"
           >
-            English
+            {t("language.en")}
           </button>
         </li>
       </ul>
 
       <div className="mt-2 flex justify-end">
         <button
+          type="button"
           onClick={onClose}
           className="hidden [@media(pointer:coarse)]:inline-flex rounded-md border px-3 py-1.5 text-xs dark:border-neutral-700"
         >
-          닫기
+          {t("common.close")}
         </button>
       </div>
     </div>,
