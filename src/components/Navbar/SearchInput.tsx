@@ -27,11 +27,7 @@ export default function SearchInput() {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="relative w-full max-w-xl"
-      role="search"
-    >
+    <form onSubmit={handleSubmit} className="relative w-full max-w-xl" role="search">
       <input
         type="search"
         value={keyword}
@@ -42,10 +38,9 @@ export default function SearchInput() {
                    dark:border-neutral-700 dark:bg-neutral-800 dark:text-slate-100"
       />
 
-      {/* 🔍 버튼을 실제 검색 버튼으로 사용 */}
       <button
         type="submit"
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-300"
         aria-label="공연 검색"
       >
         🔍
