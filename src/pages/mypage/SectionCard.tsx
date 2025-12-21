@@ -1,23 +1,25 @@
-import React, { PropsWithChildren } from "react";
+import type { ReactNode } from "react";
 
-export default function SectionCard({
-  id,
-  title,
-  extra,
-  children,
-}: PropsWithChildren<{ id: string; title: string; extra?: React.ReactNode }>) {
+type Props = {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+};
+
+export default function SectionCard({ title, description, children, className = "" }: Props) {
   return (
-    <section
-      id={id}
-      // 헤더 높이만큼 스크롤 여유
-      className="scroll-mt-[calc(var(--header-h)+8px)]">
-      <div className="rounded-xl border p-4 dark:border-neutral-800">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">{title}</h2>
-          {extra}
-        </div>
-        {children}
-      </div>
+    <section className={`sb-surface p-6 ${className}`}>
+      <header className="mb-4">
+        <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-1 text-sm sb-text-muted">{description}</p>
+        ) : null}
+      </header>
+
+      <div>{children}</div>
     </section>
   );
 }
