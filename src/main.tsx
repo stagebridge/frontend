@@ -6,6 +6,7 @@ import router from "./app/router";
 import "./index.css";
 import { AuthProvider } from "./contexts/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "./i18n";
 
 // 다크모드 초기화 (렌더 이전에 수행)
 (() => {
