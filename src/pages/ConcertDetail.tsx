@@ -1,163 +1,254 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { fetchPerformanceDetail } from "../api/performances";
+import BoardSection, { type BoardKind } from "../components/concert-detail/BoardSection";
 
-type ConcertLike = {
+type NormalizedDetail = {
   id: string;
   title: string;
-  imageUrl?: string;
-  dateStart?: string;
-  dateEnd?: string;
-  venue?: string;
-  price?: string;
+  posterUrl: string;
+
+  regionLabel?: string;
+  genreLabel?: string;
+  periodLabel?: string;
+
+  cast?: string; // 출연진
+  runtime?: string; // 런타임
+  age?: string; // 관람연령
+  price?: string; // 가격
+  guideTime?: string; // 상영시간대
+  crew?: string; // 제작진
 };
 
-function useConcert(id?: string): ConcertLike | null {
-  return useMemo(() => {
-    if (!id) return null;
-    return {
-      id,
-      title: "IVE WORLD TOUR [SHOW WHAT I AM]",
-      imageUrl:
-        "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1500",
-      dateStart: "2025-09-01",
-      dateEnd: "2025-10-02",
-      venue: "Kアリーナ 横浜",
-      price: "25,000円",
-    };
-  }, [id]);
+function normalizeDetail(raw: any): NormalizedDetail {
+  const id = String(raw?.id ?? raw?.mt20id ?? raw?.performanceId ?? raw?.perfId ?? "");
+
+  const title = String(raw?.name ?? raw?.prfnm ?? raw?.title ?? "공연명");
+
+  const posterUrl =
+    String(raw?.posterUrl ?? raw?.poster ?? raw?.posterurl ?? "").trim() ||
+    "/images/fallback-poster.png";
+
+  const start = raw?.startDate ?? raw?.prfpdfrom ?? raw?.startDt ?? raw?.openDt;
+  const end = raw?.endDate ?? raw?.prfpdto ?? raw?.endDt ?? raw?.closeDt;
+  const periodLabel = start && end ? `${start} ~ ${end}` : start ? String(start) : undefined;
+
+  const regionLabel = raw?.area ?? raw?.areaNm ?? raw?.fcltynm ?? raw?.sidoNm ?? undefined;
+  const genreLabel = raw?.genre ?? raw?.genrenm ?? undefined;
+
+  return {
+    id,
+    title,
+    posterUrl,
+    regionLabel,
+    genreLabel,
+    periodLabel,
+    cast: raw?.prfcast ?? raw?.cast ?? undefined,
+    runtime: raw?.prfruntime ?? raw?.runtime ?? undefined,
+    age: raw?.prfage ?? raw?.age ?? undefined,
+    price: raw?.pcseguidance ?? raw?.price ?? undefined,
+    guideTime: raw?.dtguidance ?? raw?.guideTime ?? undefined,
+    crew: raw?.prfcrew ?? raw?.crew ?? undefined,
+  };
 }
 
 export default function ConcertDetail() {
-  const { id } = useParams<{ id: string }>();
-  const c = useConcert(id);
-  if (!c) return <div className="mx-auto max-w-6xl px-4">데이터가 없습니다.</div>;
+  const { id } = useParams();
+  const performanceId = (id ?? "").trim();
 
-  const period =
-    c.dateStart && c.dateEnd ? `${c.dateStart} ~ ${c.dateEnd}` : c.dateStart ?? "";
+  const [raw, setRaw] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // ✅ A안(한 페이지 스크롤 네비게이션)
+  const infoRef = useRef<HTMLElement | null>(null);
+  const reviewsRef = useRef<HTMLElement | null>(null);
+  const expectationsRef = useRef<HTMLElement | null>(null);
+  const qaRef = useRef<HTMLElement | null>(null);
+
+  const scrollTo = (ref: React.RefObject<HTMLElement | null>) => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  useEffect(() => {
+    if (!performanceId) return;
+
+    setLoading(true);
+    setErrorMsg(null);
+
+    fetchPerformanceDetail(performanceId)
+      .then((res) => setRaw(res))
+      .catch((e) => setErrorMsg(e?.message ?? "상세 정보를 불러오지 못했습니다."))
+      .finally(() => setLoading(false));
+  }, [performanceId]);
+
+  const detail = useMemo(() => (raw ? normalizeDetail(raw) : null), [raw]);
+
+  if (!performanceId) {
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <div className="rounded-2xl border bg-white p-6 text-sm text-gray-700">
+          잘못된 접근입니다. 공연 ID가 없습니다.
+        </div>
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <div className="rounded-2xl border bg-white p-6 text-sm text-gray-700">
+          불러오는 중입니다.
+        </div>
+      </main>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <div className="rounded-2xl border bg-white p-6 text-sm text-red-600">{errorMsg}</div>
+      </main>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <div className="rounded-2xl border bg-white p-6 text-sm text-gray-700">
+          공연 정보를 찾을 수 없습니다.
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="pb-20">
-      {/* 상단: 2열 레이아웃 */}
-      <section className="mx-auto max-w-6xl px-4 pt-6">
-        {/* 좌: 320~520px 고정폭, 우: 420px 패널 */}
-        <div className="grid items-start gap-12 lg:grid-cols-[minmax(320px,520px)_420px] lg:gap-16">
-          {/* 좌측: 정사각형 이미지 카드 */}
-          <div className="rounded-2xl border bg-white p-3 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-            {/* aspect-square 로 정사각형 보장 + style(호환성 보강) */}
-            <div
-              className="relative aspect-square w-full overflow-hidden rounded-xl border dark:border-neutral-800"
-              style={{ aspectRatio: "1 / 1" }}
-            >
-              <img
-                src={c.imageUrl}
-                alt={c.title}
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="lazy"
-              />
-            </div>
+    <main className="mx-auto max-w-5xl px-4 py-10">
+      {/* 상단 요약 영역 */}
+      <div className="grid gap-6 md:grid-cols-[320px_1fr]">
+        <div className="overflow-hidden rounded-2xl border bg-gray-100">
+          <img src={detail.posterUrl} alt={detail.title} className="h-full w-full object-cover" />
+        </div>
+
+        <div className="rounded-2xl border bg-white p-6">
+          <h1 className="text-xl font-bold text-gray-900">{detail.title}</h1>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {detail.genreLabel ? (
+              <span className="rounded-full border px-3 py-1 text-xs text-gray-700">
+                {detail.genreLabel}
+              </span>
+            ) : null}
+            {detail.regionLabel ? (
+              <span className="rounded-full border px-3 py-1 text-xs text-gray-700">
+                {detail.regionLabel}
+              </span>
+            ) : null}
           </div>
 
-          {/* 우측: 정보 패널 (sticky) */}
-          <aside className="top-6 h-max rounded-2xl border bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900 lg:sticky">
-            <h1 className="text-2xl font-extrabold tracking-tight">{c.title}</h1>
-            <p className="mt-2 text-sm text-neutral-500">
-              KAWAIILAB. 3rd Anniversary Special LIVE
+          <div className="mt-4 rounded-xl border p-4 text-sm text-gray-700">
+            <p>
+              <span className="font-medium text-gray-900">기간: </span>
+              {detail.periodLabel ?? "정보가 등록되지 않았습니다."}
             </p>
+            <p className="mt-2">
+              <span className="font-medium text-gray-900">출연진: </span>
+              {detail.cast ?? "정보가 등록되지 않았습니다."}
+            </p>
+            <p className="mt-2">
+              <span className="font-medium text-gray-900">상영시간: </span>
+              {detail.runtime ?? "정보가 등록되지 않았습니다."}
+            </p>
+            <p className="mt-2">
+              <span className="font-medium text-gray-900">관람연령: </span>
+              {detail.age ?? "정보가 등록되지 않았습니다."}
+            </p>
+            <p className="mt-2">
+              <span className="font-medium text-gray-900">가격: </span>
+              {detail.price ?? "정보가 등록되지 않았습니다."}
+            </p>
+            <p className="mt-2">
+              <span className="font-medium text-gray-900">상영시간대: </span>
+              {detail.guideTime ?? "정보가 등록되지 않았습니다."}
+            </p>
+            <p className="mt-2">
+              <span className="font-medium text-gray-900">제작진: </span>
+              {detail.crew ?? "정보가 등록되지 않았습니다."}
+            </p>
+          </div>
 
-            <div className="mt-4 space-y-1 text-sm">
-              {period && <div>{period}</div>}
-              {c.venue && <div>{c.venue}</div>}
-              {/* 가격 강조 */}
-              {c.price && (
-                <div className="font-bold text-xl text-neutral-900 dark:text-white">
-                  {c.price}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-5">
-              <label className="mb-2 block text-sm font-medium">날짜 선택</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
-                />
-              </div>
-            </div>
-
-            <button className="mt-4 w-full rounded-lg bg-black py-3 text-sm font-semibold text-white hover:opacity-90 dark:bg-white dark:text-black">
-              예매하기
-            </button>
-          </aside>
-        </div>
-      </section>
-
-      {/* 탭 내비 */}
-      <nav className="mx-auto mt-10 max-w-6xl px-4">
-        <ul className="flex gap-6 overflow-x-auto border-b pb-3 text-sm dark:border-neutral-800">
-          <li>
-            <a
-              href="#section-info"
-              className="inline-block border-b-2 border-black pb-2 font-medium dark:border-white"
+          {/* 섹션 네비게이션(A안) */}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => scrollTo(infoRef)}
+              className="rounded-full border px-3 py-1 text-sm hover:bg-gray-50"
             >
               공연정보
-            </a>
-          </li>
-          <li>
-            <a
-              href="#section-sale"
-              className="inline-block pb-2 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo(reviewsRef)}
+              className="rounded-full border px-3 py-1 text-sm hover:bg-gray-50"
             >
-              판매정보
-            </a>
-          </li>
-          <li>
-            <a
-              href="#section-reviews"
-              className="inline-block pb-2 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+              관람후기
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo(expectationsRef)}
+              className="rounded-full border px-3 py-1 text-sm hover:bg-gray-50"
             >
-              관람후기(999+)
-            </a>
-          </li>
-          <li>
-            <a
-              href="#section-wish"
-              className="inline-block pb-2 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+              기대평
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo(qaRef)}
+              className="rounded-full border px-3 py-1 text-sm hover:bg-gray-50"
             >
-              기대평(999+)
-            </a>
-          </li>
-          <li>
-            <a
-              href="#section-qa"
-              className="inline-block pb-2 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
-            >
-              Q&A(38)
-            </a>
-          </li>
-        </ul>
-      </nav>
+              Q&amp;A
+            </button>
+          </div>
+        </div>
+      </div>
 
-      {/* 섹션들 */}
-      <section id="section-info" className="mx-auto max-w-6xl px-4 pt-6">
-        <LargePhoto src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=1500" />
-        <LargePhoto src="https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=1500" />
-      </section>
+      {/* 공연정보(상세/소개 이미지 영역 포함) */}
+      <section ref={infoRef} id="info" className="mt-10 space-y-4">
+        <div className="rounded-2xl border bg-white p-6">
+          <h2 className="text-base font-semibold text-gray-900">공연정보</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            출연진, 관람연령, 가격, 상영시간대 등은 현재 API 응답을 기준으로 표시합니다.
+          </p>
+        </div>
 
-      <section id="section-sale" className="mx-auto max-w-6xl px-4 pt-12">
-        <h2 className="mb-4 text-lg font-semibold">판매정보</h2>
-        <div className="rounded-xl border p-6 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-300">
-          예매처, 발권/환불 규정 등…
+        {/* ✅ 상세 이미지(소개 이미지) - styurls가 내려오지 않는 동안 안내만 표시 */}
+        <div className="rounded-2xl border bg-white p-6">
+          <h3 className="text-base font-semibold text-gray-900">상세 이미지</h3>
+          <p className="mt-2 text-sm text-gray-500">
+            현재 API에서 소개 이미지(styurls)가 내려오지 않아 표시할 수 없습니다.
+          </p>
         </div>
       </section>
-    </main>
-  );
-}
 
-function LargePhoto({ src }: { src: string }) {
-  return (
-    <div className="mb-8 overflow-hidden rounded-xl border dark:border-neutral-800">
-      <img src={src} alt="" className="w-full object-cover" loading="lazy" />
-    </div>
+      {/* 관람후기 */}
+      <section ref={reviewsRef} id="reviews" className="mt-10">
+        <BoardSection performanceId={detail.id} kind={"reviews" satisfies BoardKind} title="관람후기" />
+      </section>
+
+      {/* 기대평 */}
+      <section ref={expectationsRef} id="expectations" className="mt-10">
+        <BoardSection
+          performanceId={detail.id}
+          kind={"expectations" satisfies BoardKind}
+          title="기대평"
+        />
+      </section>
+
+      {/* Q&A */}
+      <section ref={qaRef} id="qa" className="mt-10">
+        <BoardSection performanceId={detail.id} kind={"qa" satisfies BoardKind} title="Q&A" />
+      </section>
+    </main>
   );
 }
