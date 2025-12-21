@@ -1,68 +1,100 @@
-// src/pages/Login.tsx
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { FormEvent, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
+type LocationState = { from?: { pathname?: string } };
+
 export default function Login() {
-  const nav = useNavigate();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
-  const [id, setId] = useState("");
-  const [password, setPw] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const from =
+    (location.state as LocationState | null)?.from?.pathname ?? "/mypage";
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setErr(null);
-    setLoading(true);
+    setError(null);
+
+    const safeEmail = email.trim();
+    if (!safeEmail || !password) {
+      setError("이메일과 비밀번호를 입력해 주세요.");
+      return;
+    }
+
     try {
-      await login({ id, password });
-      nav("/", { replace: true });
-    } catch (e: any) {
-      setErr(e?.message ?? "로그인에 실패했습니다.");
+      setSubmitting(true);
+
+      // AuthContext(login) 시그니처는 { id, password } 입니다.
+      // 현재 로그인 폼은 이메일 입력을 사용하므로, 이메일을 id로 매핑합니다.
+      await login({ id: safeEmail, password });
+
+      // RequireAuth가 남긴 목적지로 복귀(없으면 /mypage)
+      navigate(from, { replace: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "로그인에 실패했습니다.";
+      setError(msg);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-16">
-      <h1 className="mb-8 text-center text-5xl font-black tracking-tight">StageBridge</h1>
-      <form onSubmit={onSubmit} className="mx-auto max-w-xl rounded-2xl border p-8 shadow-sm dark:border-neutral-800">
-        <label className="mb-2 block text-sm font-medium">ID</label>
-        <input
-          value={id}
-          onChange={(e) => setId(e.target.value)}
-          placeholder="ID"
-          className="mb-4 w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
-        />
+    <main className="mx-auto max-w-md px-4 py-12">
+      <h1 className="text-2xl font-bold">로그인</h1>
+      <p className="mt-2 text-sm text-gray-500">
+        StageBridge 계정으로 로그인합니다.
+      </p>
 
-        <label className="mb-2 mt-2 block text-sm font-medium">Password</label>
-        <div className="mb-4 flex items-stretch gap-2">
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div>
+          <label className="text-sm font-medium">이메일</label>
           <input
-            type={showPw ? "text" : "password"}
-            value={password}
-            onChange={(e) => setPw(e.target.value)}
-            placeholder="Password"
-            className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-neutral-700 dark:bg-neutral-900"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            placeholder="example@stagebridge.com"
+            autoComplete="username"
           />
-          <button type="button" onClick={() => setShowPw((v) => !v)} className="shrink-0 rounded-lg border px-3 text-sm dark:border-neutral-700">
-            {showPw ? "숨김" : "표시"}
-          </button>
         </div>
 
-        {err && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{err}</p>}
+        <div>
+          <label className="text-sm font-medium">비밀번호</label>
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            className="mt-1 w-full rounded-md border px-3 py-2"
+            placeholder="비밀번호를 입력해 주세요."
+            autoComplete="current-password"
+          />
+        </div>
 
-        <button disabled={loading} className="mt-2 w-full rounded-lg bg-black py-3 text-white hover:opacity-90 disabled:opacity-60 dark:bg-white dark:text-black">
-          {loading ? "로그인 중..." : "Login"}
+        {error ? (
+          <p className="text-sm text-red-600">{error}</p>
+        ) : (
+          <div className="h-5" />
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-md bg-black px-4 py-2 text-white disabled:opacity-60"
+        >
+          {submitting ? "로그인 중..." : "로그인"}
         </button>
 
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <Link to="#" className="text-neutral-600 underline hover:text-neutral-900 dark:text-neutral-300">Forgot password?</Link>
-          <Link to="/signup" className="font-medium underline">Sign Up!</Link>
-        </div>
+        <p className="text-sm text-gray-600">
+          아직 계정이 없으신가요?{" "}
+          <Link to="/signup" className="font-medium underline">
+            회원가입
+          </Link>
+        </p>
       </form>
     </main>
   );
