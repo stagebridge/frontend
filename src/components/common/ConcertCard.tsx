@@ -1,109 +1,172 @@
-// src/components/common/ConcertCard.tsx
 import { Link } from "react-router-dom";
-import type { PerformanceSummary } from "../../api/performances";
 
 /**
- * 다양한 스키마를 수용하기 위한 느슨한 타입
- * - KOPIS 필드(ex. mt20id, prfnm, prfpdfrom/prfpdto, poster, fcltynm …)
- * - 백엔드 필드(ex. id, title, startDate/endDate, coverUrl, venue …)
+ * ✅ 프로젝트마다 PerformanceSummary 타입/필드명이 달라서
+ *    외부 타입 import를 제거하고, 필요한 최소 필드만 로컬로 정의합니다.
  */
-type LoosePerformance = PerformanceSummary & {
-  mt20id?: string;
+type ConcertItem = {
+  id?: string | number;
+  performanceId?: string | number;
+  perfId?: string | number;
+  mt20id?: string | number;
+
+  title?: string;
   prfnm?: string;
-  prfpdfrom?: string;
-  prfpdto?: string;
-  poster?: string;
-  posterUrl?: string;
-  fcltynm?: string;
-  prfvenue?: string;
-  hallName?: string;
   name?: string;
-  period?: string;
+
+  posterUrl?: string;
+  poster?: string;
+  styurls?: string;
   imageUrl?: string;
-  venue?: string;
+
+  area?: string;
+  areaNm?: string;
+  sidoNm?: string;
+
+  // ✅ 기간/날짜 관련 (프로젝트/응답마다 다름)
+  period?: string; // 예: "2025-07-24 ~ 2025-11-30"
+  prfpd?: string;
+
+  startDate?: string;
+  startDt?: string;
+  prfpdfrom?: string;
+  openDt?: string;
+
+  endDate?: string;
+  endDt?: string;
+  prfpdto?: string;
+  closeDt?: string;
 };
 
-/** UI 표시용 매핑 함수 (필드명이 달라도 여기서 흡수) */
-function toView(p: LoosePerformance) {
-  const id =
-    (p as any).id ??
-    p.mt20id ??
-    "";
+type ConcertCardByItemProps = {
+  item: ConcertItem;
+  href?: string; // 없으면 내부에서 item 기반으로 생성
+};
 
-  const title =
-    p.name ??
-    p.prfnm ??
-    (p as any).title ??
-    "공연 제목 미정";
+type ConcertCardByFieldsProps = {
+  href: string;
+  title: string;
+  posterUrl: string;
+  regionLabel?: string; // ✅ optional
+  dateLabel?: string; // ✅ optional
+};
 
-  const cover =
-    p.posterUrl ??
-    p.poster ??
-    p.imageUrl ??
-    "/noimage.png";
+type ConcertCardProps = ConcertCardByItemProps | ConcertCardByFieldsProps;
 
-  const venue =
-    (p as any).venue ??
-    p.hallName ??
-    p.prfvenue ??
-    p.fcltynm ??
-    "";
-
-  const period =
-    p.period ??
-    ((p as any).startDate && (p as any).endDate
-      ? `${(p as any).startDate} ~ ${(p as any).endDate}`
-      : p.prfpdfrom && p.prfpdto
-      ? `${p.prfpdfrom} ~ ${p.prfpdto}`
-      : "");
-
-  return { id: String(id), title, cover, venue, period };
+function isByItemProps(props: ConcertCardProps): props is ConcertCardByItemProps {
+  return (props as ConcertCardByItemProps).item !== undefined;
 }
 
-export default function ConcertCard({ item }: { item: LoosePerformance }) {
-  if (!item) return <div>공연 정보를 불러올 수 없습니다.</div>;
+/** ✅ "YYYY-MM-DD ~ YYYY-MM-DD" 같은 문자열에서 날짜만 깔끔히 뽑기 */
+function normalizeDateLabel(raw?: string): string | undefined {
+  const v = (raw ?? "").trim();
+  if (!v) return undefined;
 
-  const v = toView(item);
+  // 이미 "~"를 포함한 기간 문자열이면 그대로 사용(메인처럼)
+  if (v.includes("~")) return v;
 
-  // 상세 페이지에 넘겨줄 요약 정보 (상단 영역에서 바로 사용)
-  const summaryForState: PerformanceSummary = {
-    id: String(v.id),
-    name: item.name ?? v.title,
-    period: item.period ?? v.period,
-    posterUrl: item.posterUrl ?? v.cover,
-    genre: item.genre ?? "",
-    area: item.area ?? "",
-  };
+  // 단일 날짜면 그대로
+  return v;
+}
+
+/** ✅ start/end가 있으면 "start ~ end" 형태로 생성 */
+function buildRange(start?: string, end?: string): string | undefined {
+  const s = (start ?? "").trim();
+  const e = (end ?? "").trim();
+
+  if (s && e) return `${s} ~ ${e}`;
+  if (s) return s;
+  return undefined;
+}
+
+export default function ConcertCard(props: ConcertCardProps) {
+  // ✅ item 기반(기존 코드 호환)
+  if (isByItemProps(props)) {
+    const item = props.item;
+
+    const id = item.id ?? item.performanceId ?? item.perfId ?? item.mt20id ?? "";
+    const href = props.href ?? `/concerts/${id}`;
+
+    const title = item.title ?? item.prfnm ?? item.name ?? "제목 없음";
+    const posterUrl =
+      item.posterUrl ??
+      item.poster ??
+      item.styurls ??
+      item.imageUrl ??
+      "/images/fallback-poster.png";
+
+    const regionLabel = item.area ?? item.areaNm ?? item.sidoNm ?? undefined;
+
+    // ✅ 날짜 우선순위:
+    // 1) period/prfpd 같은 "기간 문자열"이 있으면 그걸 우선 사용
+    // 2) 없으면 start/end 조합으로 생성
+    const directPeriod = normalizeDateLabel(item.period ?? item.prfpd);
+
+    const startDate =
+      item.startDate ?? item.startDt ?? item.prfpdfrom ?? item.openDt ?? undefined;
+
+    const endDate =
+      item.endDate ?? item.endDt ?? item.prfpdto ?? item.closeDt ?? undefined;
+
+    const dateLabel = directPeriod ?? buildRange(startDate, endDate);
+
+    return (
+      <Link
+        to={href}
+        className="block overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-sm"
+      >
+        <div className="w-full overflow-hidden bg-gray-100">
+          <img
+            src={posterUrl}
+            alt={title}
+            className="aspect-[4/3] w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+
+        <div className="p-3">
+          <p className="line-clamp-1 text-sm font-semibold text-gray-900">{title}</p>
+
+          {regionLabel ? (
+            <p className="mt-1 line-clamp-1 text-xs text-gray-600">{regionLabel}</p>
+          ) : null}
+
+          {/* ✅ 날짜 표시(요청사항) */}
+          {dateLabel ? (
+            <p className="mt-1 line-clamp-1 text-xs text-gray-500">{dateLabel}</p>
+          ) : null}
+        </div>
+      </Link>
+    );
+  }
+
+  // ✅ 필드 기반(새 코드)
+  const { href, title, posterUrl, regionLabel, dateLabel } = props;
 
   return (
     <Link
-      to={`/concerts/${v.id}`}
-      state={{ performance: summaryForState }} // ⭐ 요약 정보 함께 전달
-      className="block rounded-xl bg-white shadow-sm ring-1 ring-neutral-200 transition hover:shadow-md dark:bg-neutral-900 dark:ring-neutral-800"
+      to={href}
+      className="block overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-sm"
     >
-      <div className="relative aspect-[4/3] overflow-hidden rounded-t-xl">
+      <div className="w-full overflow-hidden bg-gray-100">
         <img
-          src={v.cover}
-          alt={v.title}
-          className="h-full w-full object-cover"
+          src={posterUrl}
+          alt={title}
+          className="aspect-[4/3] w-full object-cover"
           loading="lazy"
         />
       </div>
 
-      <div className="px-3 pb-3 pt-2">
-        <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug text-slate-900 dark:text-slate-50">
-          {v.title}
-        </h3>
-        {v.venue && (
-          <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-            {v.venue}
-          </p>
-        )}
-        {v.period && (
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">
-            {v.period}
-          </p>
-        )}
+      <div className="p-3">
+        <p className="line-clamp-1 text-sm font-semibold text-gray-900">{title}</p>
+
+        {regionLabel ? (
+          <p className="mt-1 line-clamp-1 text-xs text-gray-600">{regionLabel}</p>
+        ) : null}
+
+        {dateLabel ? (
+          <p className="mt-1 line-clamp-1 text-xs text-gray-500">{dateLabel}</p>
+        ) : null}
       </div>
     </Link>
   );
