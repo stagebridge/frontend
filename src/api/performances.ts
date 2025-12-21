@@ -1,136 +1,206 @@
-// src/api/performances.ts
-
 import http from "../app/http";
-import type {
-  PerformanceDto,
-  PerformanceDetailDto,
-} from "../types/api/performance";
-import type {
-  PerformanceSummaryView,
-  PerformanceDetailView,
-} from "../types/performanceView";
-import {
-  toPerformanceSummaryView,
-  toPerformanceDetailView,
-} from "../utils/normalizePerformances";
+import axios from "axios";
+import { normalizeSidoToken } from "../utils/region";
 
-// UI에서 사용할 공식 타입
-export type PerformanceSummary = PerformanceSummaryView;
-export type PerformanceDetail = PerformanceDetailView;
-
-// 공통 응답 형태: { message, data: PerformanceDto[] }
-type PerformanceListResponse = {
-  message?: string;
-  data?: PerformanceDto[];
-};
-
-// 상세 응답 형태: { message, data: PerformanceDetailDto }
-type PerformanceDetailResponse = {
-  message?: string;
-  data?: PerformanceDetailDto;
-};
-
-/**
- * ✅ 공통: 공연 목록 조회
- * - Search 페이지, 리스트 페이지 등에서 사용
- */
-export async function fetchPerformanceList(params?: {
-  page?: number;
-  size?: number;
-  keyword?: string;
-  region?: string;
+export type PerformanceSummary = {
+  id: string;
+  name: string;
+  area?: string;
   genre?: string;
-}): Promise<PerformanceSummary[]> {
-  const { data } = await http.get<PerformanceListResponse>("/performances", {
-    params,
-  });
+  period?: string;
+  posterUrl?: string;
+};
 
-  const list = data.data ?? [];
-  return list.map(toPerformanceSummaryView);
+export type PerformanceDetail = {
+  id: string;
+  name: string;
+  area?: string;
+  genre?: string;
+  period?: string;
+  posterUrl?: string;
+
+  venue?: string;
+  startDate?: string;
+  endDate?: string;
+  images?: string[];
+};
+
+type ApiListResponse<T> = T[] | { data: T[] } | { items: T[] };
+type ApiOneResponse<T> = T | { data: T };
+
+function unwrapList<T>(payload: ApiListResponse<T>): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "data" in payload &&
+    Array.isArray((payload as any).data)
+  ) {
+    return (payload as any).data as T[];
+  }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "items" in payload &&
+    Array.isArray((payload as any).items)
+  ) {
+    return (payload as any).items as T[];
+  }
+  return [];
+}
+
+function unwrapOne<T>(payload: ApiOneResponse<T>): T {
+  if (payload && typeof payload === "object" && "data" in payload) {
+    return (payload as any).data as T;
+  }
+  return payload as T;
 }
 
 /**
- * ✅ 공통: 랭킹 조회
- * - genre 가 있으면 장르별 랭킹
- * - 없으면 메인 랭킹(핫이슈)
+ * 공연명에서 지역 토큰 추출 (예: "레드북 [서울 광진]" → "서울")
  */
-export async function fetchRanking(params?: {
-  country?: string;
-  genre?: string;
-}): Promise<PerformanceSummary[]> {
-  // country는 아직 API에서 사용하지 않으므로 무시
+function extractAreaFromName(name: string): string | undefined {
+  const m = name.match(/\[([^\]]+)\]/);
+  if (!m) return undefined;
+  const inside = m[1].trim();
+  if (!inside) return undefined;
 
-  // 장르별 랭킹
-  if (params?.genre) {
-    const { data } = await http.get<PerformanceListResponse>(
-      "/performances/main/by-genre",
-      { params: { genre: params.genre } },
-    );
-    const list = data.data ?? [];
-    return list.map(toPerformanceSummaryView);
-  }
+  // 첫 토큰을 sido로 간주 (서울/경기/부산 등)
+  const firstToken = inside.split(/\s+/)[0]?.trim();
+  if (!firstToken) return undefined;
 
-  // 전체 랭킹 (메인 핫이슈용)
-  const { data } = await http.get<PerformanceListResponse>(
-    "/performances/main/ranked",
-  );
-  const list = data.data ?? [];
-  return list.map(toPerformanceSummaryView);
+  const normalized = normalizeSidoToken(firstToken);
+  return normalized || undefined;
 }
 
-/**
- * ✅ 공통: 공연 상세 조회
- * - Concert 페이지, usePerformance 훅에서 사용
- */
-export async function fetchPerformance(
-  mt20id: string,
-): Promise<PerformanceDetail> {
-  const { data } = await http.get<PerformanceDetailResponse>(
-    `/performances/${mt20id}`,
-  );
+function normalizeSummary(raw: any): PerformanceSummary {
+  const id = String(raw?.id ?? raw?.perfId ?? raw?.prfid ?? raw?.mt20id ?? "");
+  const name = String(raw?.name ?? raw?.title ?? raw?.prfnm ?? "제목 없음");
 
-  if (!data.data) {
-    throw new Error("공연 상세 정보를 찾을 수 없습니다.");
+  let area =
+    raw?.area ?? raw?.areaNm ?? raw?.sidoNm ?? raw?.sidonm ?? undefined;
+  const genre = raw?.genre ?? raw?.genrenm ?? undefined;
+
+  const start =
+    raw?.startDate ?? raw?.startDt ?? raw?.prfpdfrom ?? raw?.openDt ?? undefined;
+  const end =
+    raw?.endDate ?? raw?.endDt ?? raw?.prfpdto ?? raw?.closeDt ?? undefined;
+
+  const period =
+    raw?.period ??
+    (start && end ? `${start} ~ ${end}` : start ? `${start}` : undefined);
+
+  const posterUrl =
+    raw?.posterUrl ??
+    raw?.poster ??
+    raw?.styurl ??
+    (Array.isArray(raw?.styurls) ? raw.styurls[0] : raw?.styurls) ??
+    raw?.imageUrl ??
+    undefined;
+
+  // ✅ area가 없으면 name에서 [지역] 파싱으로 보정
+  if (typeof area !== "string" || area.trim().length === 0) {
+    const derived = extractAreaFromName(name);
+    area = derived;
+  } else {
+    area = normalizeSidoToken(area);
   }
 
-  // 현재 상세 응답에는 리스트용 필드가 부족해서, 최소 정보만 채워서 넘겨둠
-  const dummyListDto: PerformanceDto = {
-    mt20id: data.data.mt20id,
-    prfnm: "",
-    prfpdfrom: "",
-    prfpdto: "",
-    prfcast: null,
-    poster: null,
-    genrenm: "",
-    sidonm: null,
-    gugunnm: null,
-    rnum: 0,
+  return {
+    id,
+    name,
+    area: typeof area === "string" ? area : undefined,
+    genre: typeof genre === "string" ? genre : undefined,
+    period: typeof period === "string" ? period : undefined,
+    posterUrl: typeof posterUrl === "string" ? posterUrl : undefined,
   };
-
-  return toPerformanceDetailView(dummyListDto, data.data);
 }
 
-/* ===========================
- *  아래부터는 "기존 코드 호환용 래퍼"
- *  (이미 여러 곳에서 쓰고 있는 함수 이름 그대로 유지)
- * ========================= */
+async function getFirstList(
+  paths: Array<{ url: string; params?: Record<string, any> }>
+): Promise<any[]> {
+  for (const p of paths) {
+    try {
+      const res = await http.get<ApiListResponse<any>>(
+        p.url,
+        p.params ? { params: p.params } : undefined
+      );
+      return unwrapList<any>(res.data);
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 404) continue;
+      throw e;
+    }
+  }
+  return [];
+}
 
-/** 기존 Search.tsx 에서 쓰는 이름 */
+/** ✅ 전체 목록: 404를 유발하는 ranked 후보는 제거 */
 export async function fetchPerformances(): Promise<PerformanceSummary[]> {
-  return fetchPerformanceList();
+  const list = await getFirstList([
+    { url: "/performances" },
+    { url: "/performances/main" },
+    { url: "/performances/all" },
+  ]);
+
+  return list.map(normalizeSummary);
 }
 
-/** 기존 HotIssueSection 에서 쓰는 이름 */
+/** (남겨두되, 랭킹 섹션에서는 사용하지 않도록 권장) */
 export async function fetchRankedPerformances(): Promise<PerformanceSummary[]> {
-  return fetchRanking();
+  const list = await getFirstList([
+    { url: "/performances/main" },
+    { url: "/performances" },
+  ]);
+
+  return list.map(normalizeSummary);
 }
 
-/** 기존 RankingSection 에서 쓰는 이름 */
+/** (남겨두되, 랭킹 섹션에서는 사용하지 않도록 권장) */
 export async function fetchPerformancesByGenre(
-  genre: string,
+  genre: string
 ): Promise<PerformanceSummary[]> {
-  return fetchRanking({ genre });
+  const list = await getFirstList([
+    { url: "/performances/by-genre", params: { genre } },
+    { url: "/performances/genre", params: { genre } },
+    { url: "/performances/main/by-genre", params: { genre } },
+  ]);
+
+  return list.map(normalizeSummary);
 }
 
-/** 기존 Concert.tsx 에서 쓰는 이름 */
-export const fetchPerformanceDetail = fetchPerformance;
+/** 상세 */
+export async function fetchPerformanceDetail(
+  id: string
+): Promise<PerformanceDetail> {
+  const res = await http.get<ApiOneResponse<any>>(
+    `/performances/${encodeURIComponent(id)}`
+  );
+  const raw = unwrapOne<any>(res.data);
+  const summary = normalizeSummary(raw);
+
+  const venue = raw?.venue ?? raw?.fcltynm ?? raw?.place ?? undefined;
+
+  const startDate =
+    raw?.startDate ?? raw?.startDt ?? raw?.prfpdfrom ?? raw?.openDt ?? undefined;
+  const endDate =
+    raw?.endDate ?? raw?.endDt ?? raw?.prfpdto ?? raw?.closeDt ?? undefined;
+
+  const images = Array.isArray(raw?.images)
+    ? raw.images
+    : Array.isArray(raw?.detailImages)
+      ? raw.detailImages
+      : undefined;
+
+  return {
+    id: summary.id,
+    name: summary.name,
+    area: summary.area,
+    genre: summary.genre,
+    period: summary.period,
+    posterUrl: summary.posterUrl,
+    venue: typeof venue === "string" ? venue : undefined,
+    startDate: typeof startDate === "string" ? startDate : undefined,
+    endDate: typeof endDate === "string" ? endDate : undefined,
+    images,
+  };
+}
