@@ -1,166 +1,213 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import Chip from "../common/Chip";
 import ConcertCard from "../common/ConcertCard";
 import { GENRES, REGIONS } from "../../constants/ranking";
-import { Link } from "react-router-dom";
 import {
-  fetchPerformancesByGenre,
+  fetchPerformances,
+  fetchPerformanceDetail,
   type PerformanceSummary,
 } from "../../api/performances";
+import { getRegionGroupFromArea } from "../../utils/region";
 
 type Tab = "genre" | "region";
 type Genre = (typeof GENRES)[number];
-type Region = (typeof REGIONS)[number];
 
-const mapGenreLabelToApiParam = (genre: Genre): string => {
-  switch (genre) {
-    case "클래식":
-      return "서양음악(클래식)";
-    default:
-      return "대중음악";
-  }
-};
+type RegionLiteral = (typeof REGIONS)[number];
+type RegionNonNull = Exclude<RegionLiteral, null>;
+const REGION_OPTIONS = REGIONS.filter((r): r is RegionNonNull => r !== null);
+type RegionGroup = (typeof REGION_OPTIONS)[number];
+
+function buildPosterUrl(item: PerformanceSummary): string {
+  return item.posterUrl?.trim()
+    ? item.posterUrl
+    : "https://placehold.co/600x400?text=No+Image";
+}
+
+/**
+ * ✅ 장르 표기 흔들림 대응:
+ * - "뮤지컬/오페라" → "뮤지컬"로 매칭 가능
+ * - 공백/괄호/슬래시 등 분리해서 비교
+ */
+function matchesGenreValue(rawGenre: string | undefined, selected: Genre): boolean {
+  const g = (rawGenre ?? "").trim();
+  if (!g) return false;
+
+  if (g === selected) return true;
+  if (g.includes(selected)) return true;
+
+  // 구분자 기반 토큰화 (/, ·, ,, 공백, 괄호)
+  const tokens = g
+    .split(/[\/·,()\s]+/g)
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  return tokens.includes(selected);
+}
 
 export default function RankingSection() {
   const [tab, setTab] = useState<Tab>("genre");
-  const [activeGenre, setActiveGenre] = useState<Genre>(GENRES[0]);
-  const [activeRegion, setActiveRegion] = useState<Region>(REGIONS[0]);
-  const [items, setItems] = useState<PerformanceSummary[]>([]);
+  const [selectedGenre, setSelectedGenre] = useState<Genre>(GENRES[0]);
+  const [selectedRegion, setSelectedRegion] = useState<RegionGroup>(REGION_OPTIONS[0]);
+  const [baseItems, setBaseItems] = useState<PerformanceSummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
+  /**
+   * ✅ 핵심: 목록 응답에 genre가 없을 수 있으므로,
+   * 장르 탭에서만 상세 API로 genre를 보강하는 캐시 맵
+   */
+  const [genreById, setGenreById] = useState<Record<string, string>>({});
+
+  // ✅ 전용 엔드포인트 없이, 기본 목록을 한 번만 로드
   useEffect(() => {
-    let cancelled = false;
+    let ignore = false;
 
-    (async () => {
-      if (tab === "region") {
-        setItems([]);
-        setLoading(false);
-        setError(null);
-        return;
-      }
-
+    async function load() {
       setLoading(true);
-      setError(null);
-
       try {
-        const apiGenre = mapGenreLabelToApiParam(activeGenre);
-        const data = await fetchPerformancesByGenre(apiGenre);
-
-        if (!cancelled) {
-          setItems((data ?? []).slice(0, 6)); // 최대 6개 노출
-        }
-      } catch (e) {
-        if (!cancelled) {
-          const msg =
-            e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.";
-          setError(msg);
-          setItems([]);
-        }
+        const list = await fetchPerformances();
+        if (!ignore) setBaseItems(list);
+      } catch {
+        if (!ignore) setBaseItems([]);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!ignore) setLoading(false);
       }
-    })();
+    }
+
+    load();
 
     return () => {
-      cancelled = true;
+      ignore = true;
     };
-  }, [tab, activeGenre, activeRegion]);
+  }, []);
 
-  const right = (
-    <Link
-      to={
-        tab === "genre"
-          ? `/list?tab=genre&genre=${encodeURIComponent(activeGenre)}`
-          : `/list?tab=region&region=${encodeURIComponent(activeRegion)}`
+  /**
+   * ✅ 장르 탭에서만 “genre 누락” 항목을 상세로 보강
+   * - 과도한 호출 방지를 위해 최대 40개만 보강
+   * - 이미 캐시된 id는 다시 호출하지 않음
+   */
+  useEffect(() => {
+    let ignore = false;
+
+    async function enrichGenres() {
+      if (tab !== "genre") return;
+      if (baseItems.length === 0) return;
+
+      const targets = baseItems
+        .filter((p) => !p.genre?.trim())
+        .map((p) => p.id)
+        .filter((id) => !genreById[id])
+        .slice(0, 40);
+
+      if (targets.length === 0) return;
+
+      // ✅ 순차 호출(안정성 우선)
+      const updates: Record<string, string> = {};
+      for (const id of targets) {
+        try {
+          const detail = await fetchPerformanceDetail(id);
+          const g = (detail.genre ?? "").trim();
+          if (g) updates[id] = g;
+        } catch {
+          // 상세 실패는 무시(개별 실패로 전체 중단 방지)
+        }
+        if (ignore) return;
       }
-      className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
-    >
-      전체보기
-    </Link>
-  );
+
+      if (!ignore && Object.keys(updates).length > 0) {
+        setGenreById((prev) => ({ ...prev, ...updates }));
+      }
+    }
+
+    enrichGenres();
+
+    return () => {
+      ignore = true;
+    };
+  }, [tab, baseItems, genreById]);
+
+  const filteredItems = useMemo(() => {
+    if (tab === "genre") {
+      return baseItems.filter((p) => {
+        const genre = p.genre?.trim() ? p.genre : genreById[p.id];
+        return matchesGenreValue(genre, selectedGenre);
+      });
+    }
+
+    return baseItems.filter((p) => {
+      const group = getRegionGroupFromArea(p.area ?? "");
+      return group === selectedRegion;
+    });
+  }, [baseItems, tab, selectedGenre, selectedRegion, genreById]);
+
+  const visibleItems = useMemo(() => filteredItems.slice(0, 6), [filteredItems]);
 
   return (
-    <section className="mx-auto mt-12 max-w-7xl px-4 sm:px-6">
-      {/* 상단 탭 */}
-      <div className="mb-3 flex items-center gap-4">
+    <section className="mx-auto max-w-6xl px-4 py-12">
+      <div className="mb-5 flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">랭킹</h2>
+        <Link to="/search" className="text-sm text-slate-500 hover:underline">
+          전체보기
+        </Link>
+      </div>
+
+      <div className="mb-4 flex gap-2">
         <button
+          type="button"
           onClick={() => setTab("genre")}
-          className={
-            tab === "genre"
-              ? "text-[25px] font-extrabold tracking-tight text-slate-900 dark:text-slate-100"
-              : "text-[25px] font-bold tracking-tight text-slate-400 dark:text-slate-500"
-          }
+          className={`rounded-full px-4 py-2 text-sm ${
+            tab === "genre" ? "bg-black text-white" : "border bg-white"
+          }`}
         >
           장르별 랭킹
         </button>
         <button
+          type="button"
           onClick={() => setTab("region")}
-          className={
-            tab === "region"
-              ? "text-[25px] font-extrabold tracking-tight text-slate-900 dark:text-slate-100"
-              : "text-[25px] font-bold tracking-tight text-slate-400 dark:text-slate-500"
-          }
+          className={`rounded-full px-4 py-2 text-sm ${
+            tab === "region" ? "bg-black text-white" : "border bg-white"
+          }`}
         >
           지역별 랭킹
         </button>
-
-        <div className="flex flex-1 items-center justify-end">{right}</div>
       </div>
 
-      {/* 장르/지역 칩 */}
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-6 flex flex-wrap gap-2">
         {tab === "genre"
           ? GENRES.map((g) => (
-              <Chip
-                key={g}
-                active={g === activeGenre}
-                onClick={() => setActiveGenre(g)}
-              >
+              <Chip key={g} active={g === selectedGenre} onClick={() => setSelectedGenre(g)}>
                 {g}
               </Chip>
             ))
-          : REGIONS.map((r) => (
-              <Chip
-                key={r}
-                active={r === activeRegion}
-                onClick={() => setActiveRegion(r)}
-              >
+          : REGION_OPTIONS.map((r) => (
+              <Chip key={r} active={r === selectedRegion} onClick={() => setSelectedRegion(r)}>
                 {r}
               </Chip>
             ))}
       </div>
 
-      {/* 에러 메시지 */}
-      {error && (
-        <p className="mb-2 text-sm text-red-500">
-          공연 정보를 불러오는 중 오류가 발생했습니다: {error}
-        </p>
-      )}
-
-      {/* 카드 그리드 */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-60 animate-pulse rounded-xl bg-slate-200/60 dark:bg-neutral-800"
-            />
-          ))}
+        <div className="mt-4 text-sm text-neutral-500">불러오는 중입니다.</div>
+      ) : tab === "genre" && baseItems.length > 0 && visibleItems.length === 0 ? (
+        <div className="mt-4 text-sm text-neutral-500">
+          장르 정보가 목록에 포함되지 않아 상세 조회로 보강 중일 수 있습니다.
         </div>
+      ) : visibleItems.length === 0 ? (
+        <div className="mt-4 text-sm text-neutral-500">조건에 맞는 공연이 없습니다.</div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((item) => (
-            <ConcertCard key={item.id} item={item} />
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleItems.map((p) => (
+            <li key={p.id}>
+              <ConcertCard
+                href={`/concerts/${p.id}`}
+                title={p.name}
+                posterUrl={buildPosterUrl(p)}
+                dateLabel={p.period}
+                regionLabel={tab === "region" ? (p.area ?? undefined) : undefined}
+              />
+            </li>
           ))}
-          {!error && !loading && items.length === 0 && tab === "region" && (
-            <p className="text-sm text-slate-500">
-              아직 지역별 랭킹 데이터가 준비되지 않았습니다.
-            </p>
-          )}
-        </div>
+        </ul>
       )}
     </section>
   );
