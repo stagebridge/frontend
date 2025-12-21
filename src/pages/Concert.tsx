@@ -1,242 +1,265 @@
-// src/pages/Concert.tsx
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { fetchPerformanceDetail, type PerformanceDetail } from "../api/performances";
 
-import { useEffect, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
-import {
-  fetchPerformanceDetail,
-  type PerformanceDetail,
-  type PerformanceSummary,
-} from "../api/performances";
+type TabKey = "info" | "discount" | "review" | "expect" | "qna";
 
-type LocationState = {
-  performance?: PerformanceSummary;
+type ViewModel = {
+  id: string;
+  title: string;
+  period: string | null;
+  area: string | null;
+  genre: string | null;
+  venue: string | null;
+  posterUrl: string | null;
 };
 
-// 상세 정보 + (선택) 요약 정보를 모두 담을 수 있는 타입
-type PerformanceLike = PerformanceDetail | PerformanceSummary;
+function toViewModel(detail: PerformanceDetail, fallbackId: string): ViewModel {
+  const id = String(detail?.id ?? fallbackId);
+  const title = String(detail?.name ?? "공연명");
+
+  const area = typeof detail?.area === "string" ? detail.area : null;
+  const genre = typeof detail?.genre === "string" ? detail.genre : null;
+  const venue = typeof detail?.venue === "string" ? detail.venue : null;
+
+  const periodFromApi =
+    typeof detail?.period === "string" && detail.period.trim() ? detail.period.trim() : null;
+
+  const start = typeof detail?.startDate === "string" ? detail.startDate : null;
+  const end = typeof detail?.endDate === "string" ? detail.endDate : null;
+
+  const period = periodFromApi ?? (start && end ? `${start} ~ ${end}` : start ? start : null);
+
+  const posterUrl =
+    typeof detail?.posterUrl === "string" && detail.posterUrl.trim()
+      ? detail.posterUrl.trim()
+      : null;
+
+  return {
+    id,
+    title,
+    period,
+    area,
+    genre,
+    venue,
+    posterUrl,
+  };
+}
 
 export default function Concert() {
-  const { id = "" } = useParams<{ id: string }>();
-  const location = useLocation();
-  const state = location.state as LocationState | null;
+  const nav = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const performanceId = useMemo(() => String(id ?? "").trim(), [id]);
 
-  // 카드에서 넘어온 요약 정보가 있으면 그걸로 먼저 채워 둠
-  const [performance, setPerformance] = useState<PerformanceLike | null>(
-    state?.performance ?? null,
-  );
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(
-    state?.performance?.period ?? "",
-  );
+  const [detail, setDetail] = useState<ViewModel | null>(null);
+
+  const [tab, setTab] = useState<TabKey>("info");
 
   useEffect(() => {
-    if (!id) return;
+    if (!performanceId) {
+      setError("공연 ID가 올바르지 않습니다.");
+      setLoading(false);
+      return;
+    }
 
-    let cancelled = false;
+    let ignore = false;
 
     (async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const detail = await fetchPerformanceDetail(id);
+        const raw = await fetchPerformanceDetail(performanceId);
+        const vm = toViewModel(raw, performanceId);
 
-        if (!cancelled) {
-          // 카드에서 넘어온 요약 정보가 있다면,
-          // 상세 필드(detail)에 요약 필드(prev)를 덮어써서 사용
-          setPerformance((prev) =>
-            prev
-              ? ({ ...detail, ...prev } as PerformanceLike) // 이름/기간/포스터는 카드 값 우선
-              : detail,
-          );
-
-          // 이미 카드에서 기간을 설정했다면 그대로 유지, 없으면 상세값 사용
-          setSelectedDate((prev) => prev || detail.period || "");
-        }
+        if (!ignore) setDetail(vm);
       } catch (e) {
-        if (!cancelled) {
-          const msg =
-            e instanceof Error
-              ? e.message
-              : "공연 정보를 불러오는 중 오류가 발생했습니다.";
-          setError(msg);
+        if (!ignore) {
+          setError(e instanceof Error ? e.message : "공연 정보를 불러오지 못했습니다.");
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!ignore) setLoading(false);
       }
     })();
 
     return () => {
-      cancelled = true;
+      ignore = true;
     };
-  }, [id]);
+  }, [performanceId]);
 
-  // 로딩
-  if (loading && !performance) {
+  if (loading) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-10">
-        <p className="text-center text-sm text-neutral-500">
-          공연 정보를 불러오는 중입니다…
-        </p>
+      <main className="mx-auto max-w-5xl px-6 py-12">
+        <p className="text-sm text-neutral-500">불러오는 중입니다.</p>
       </main>
     );
   }
 
-  // 에러 / 데이터 없음
-  if (error || !performance) {
+  if (error || !detail) {
     return (
-      <main className="mx-auto max-w-7xl px-4 py-10">
-        <p className="mb-2 text-center text-sm text-neutral-500">
-          {error ?? "해당 공연을 찾을 수 없습니다."}
-        </p>
+      <main className="mx-auto max-w-5xl px-6 py-12">
+        <p className="text-sm text-red-600">{error ?? "공연 정보를 찾을 수 없습니다."}</p>
       </main>
     );
   }
 
-  // 가격 정보는 아직 없으므로 일단 "-" 로 표기
-  const priceText = "-";
+  const dateOptionLabel = detail.period ?? "날짜 정보가 없습니다.";
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      {/* 상단: 좌(대표 이미지) / 우(정보+예매) */}
-      <section className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-        {/* 좌: 대표 이미지 */}
-        <div className="lg:col-span-5">
-          <div className="overflow-hidden rounded-xl border dark:border-neutral-800">
-            <img
-              src={performance.posterUrl}
-              alt={performance.name}
-              className="h-auto w-full object-cover"
-            />
+    <main className="mx-auto max-w-6xl px-6 py-10">
+      {/* 상단: 포스터 + 기본 정보 */}
+      <section className="grid grid-cols-1 gap-10 lg:grid-cols-[360px_1fr]">
+        {/* 포스터 */}
+        <div className="w-full">
+          <div className="overflow-hidden rounded-2xl border bg-white">
+            <div className="aspect-[3/4] w-full bg-neutral-100">
+              {detail.posterUrl ? (
+                <img src={detail.posterUrl} alt={detail.title} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <span className="text-sm text-neutral-500">포스터가 없습니다.</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 우: 정보 + 가격 + 날짜선택 + 예매 */}
-        <div className="lg:col-span-7">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            {performance.name}
-          </h1>
+        {/* 정보 */}
+        <div className="min-w-0">
+          <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900">{detail.title}</h1>
 
-          <div className="mt-4 space-y-1 text-sm text-neutral-700 dark:text-neutral-300">
-            <p>
-              <span className="inline-block w-16 text-neutral-500">기간</span>
-              {performance.period}
-            </p>
-            <p>
-              <span className="inline-block w-16 text-neutral-500">지역</span>
-              {performance.area || "-"}
-            </p>
-            <p>
-              <span className="inline-block w-16 text-neutral-500">장르</span>
-              {performance.genre || "-"}
-            </p>
-            <p>
-              <span className="inline-block w-16 text-neutral-500">가격</span>
-              {priceText}
-            </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {detail.genre ? (
+              <span className="rounded-full border px-3 py-1 text-xs text-neutral-700">{detail.genre}</span>
+            ) : null}
           </div>
 
-          {/* 날짜 선택 + 예매 버튼 */}
-          <div className="mt-6">
-            <label className="mb-2 block text-sm font-medium">날짜 선택</label>
-            <div className="flex gap-2">
-              {/* 아직 일자별 정보는 없어서, 기간 문자열 하나만 선택값으로 사용 */}
-              <select
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-neutral-700 dark:bg-neutral-900"
-              >
-                <option value={performance.period || ""}>
-                  {performance.period || "날짜 정보 없음"}
-                </option>
-              </select>
+          {/* 표 형태 정보 */}
+          <div className="mt-6 w-full max-w-2xl rounded-2xl border bg-white p-5">
+            <div className="grid grid-cols-[64px_1fr] gap-y-2 text-sm">
+              <div className="text-neutral-500">기간</div>
+              <div className="text-neutral-900">{detail.period ?? "-"}</div>
 
-              <button
-                type="button"
-                className="whitespace-nowrap rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-              >
-                예매하기
-              </button>
+              <div className="text-neutral-500">지역</div>
+              <div className="text-neutral-900">{detail.area ?? "-"}</div>
+
+              <div className="text-neutral-500">장르</div>
+              <div className="text-neutral-900">{detail.genre ?? "-"}</div>
+
+              <div className="text-neutral-500">가격</div>
+              <div className="text-neutral-900">-</div>
+            </div>
+
+            {/* 날짜 선택 + 예매하기 */}
+            <div className="mt-5">
+              <div className="mb-2 text-sm font-semibold text-neutral-900">날짜 선택</div>
+
+              <div className="flex w-full max-w-2xl gap-3">
+                <select
+                  className="h-10 w-full rounded-lg border bg-white px-3 text-sm text-neutral-900"
+                  value={dateOptionLabel}
+                  onChange={() => {
+                    // 현재는 단일 옵션(기간 표시)만 유지합니다.
+                  }}
+                >
+                  <option value={dateOptionLabel}>{dateOptionLabel}</option>
+                </select>
+
+                {/* ✅ 여기서 실제로 reserve 페이지로 이동 */}
+                <button
+                  type="button"
+                  className="h-10 shrink-0 rounded-lg bg-black px-5 text-sm font-semibold text-white"
+                  onClick={() => nav(`/reserve/${detail.id}`)}
+                >
+                  예매하기
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 탭 영역 */}
+      {/* 탭 */}
       <section className="mt-10">
-        <nav className="flex gap-6 border-b pb-2 dark:border-neutral-800">
-          <a href="#info" className="text-sm font-medium hover:opacity-80">
-            공연정보
-          </a>
-          <a href="#refund" className="text-sm font-medium hover:opacity-80">
-            환불정책
-          </a>
-          <a href="#reviews" className="text-sm font-medium hover:opacity-80">
-            관람후기(999+)
-          </a>
-          <a href="#wish" className="text-sm font-medium hover:opacity-80">
-            기대평(999+)
-          </a>
-          <a href="#qna" className="text-sm font-medium hover:opacity-80">
-            Q&amp;A(38)
-          </a>
-        </nav>
+        <div className="border-b">
+          <div className="flex flex-wrap gap-6 text-sm">
+            <button
+              type="button"
+              className={`py-3 ${
+                tab === "info" ? "border-b-2 border-black font-semibold text-black" : "text-neutral-600"
+              }`}
+              onClick={() => setTab("info")}
+            >
+              공연정보
+            </button>
 
-        {/* 공연정보 섹션 – 지금은 기본 문구 + 포스터만 사용 */}
-        <div id="info" className="scroll-mt-20 pt-6">
-          <h2 className="mb-3 text-lg font-semibold">공연정보</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            출연진: 정보가 등록되지 않았습니다.
-          </p>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            관람연령: 정보가 등록되지 않았습니다.
-          </p>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            안내: 공연 안내가 등록되지 않았습니다.
-          </p>
+            <button
+              type="button"
+              className={`py-3 ${
+                tab === "discount" ? "border-b-2 border-black font-semibold text-black" : "text-neutral-600"
+              }`}
+              onClick={() => setTab("discount")}
+            >
+              할인정보
+            </button>
 
-          <div className="mt-4">
-            <p className="mb-2 text-sm text-neutral-500">공연 이미지 1</p>
-            <div className="overflow-hidden rounded-lg border dark:border-neutral-800">
-              <img
-                src={performance.posterUrl}
-                alt={performance.name}
-                className="h-auto w-full object-cover"
-              />
-            </div>
+            <button
+              type="button"
+              className={`py-3 ${
+                tab === "review" ? "border-b-2 border-black font-semibold text-black" : "text-neutral-600"
+              }`}
+              onClick={() => setTab("review")}
+            >
+              관람후기(999+)
+            </button>
+
+            <button
+              type="button"
+              className={`py-3 ${
+                tab === "expect" ? "border-b-2 border-black font-semibold text-black" : "text-neutral-600"
+              }`}
+              onClick={() => setTab("expect")}
+            >
+              기대평(999+)
+            </button>
+
+            <button
+              type="button"
+              className={`py-3 ${
+                tab === "qna" ? "border-b-2 border-black font-semibold text-black" : "text-neutral-600"
+              }`}
+              onClick={() => setTab("qna")}
+            >
+              Q&amp;A(38)
+            </button>
           </div>
         </div>
 
-        <div id="refund" className="scroll-mt-20 pt-10">
-          <h2 className="mb-3 text-lg font-semibold">환불정책</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            예매 후 7일 이내 전액 환불(공연 3일 전까지만 가능) 등 정책을 표
-            시합니다. (실제 정책은 추후 API 또는 CMS와 연동하여 교체 예정)
-          </p>
-        </div>
+        {/* 내용 */}
+        <div className="mt-8">
+          {tab === "info" ? (
+            <div>
+              <h2 className="text-base font-extrabold text-neutral-900">공연정보</h2>
 
-        <div id="reviews" className="scroll-mt-20 pt-10">
-          <h2 className="mb-3 text-lg font-semibold">관람후기</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            관람객 후기 리스트/평점을 노출합니다. (추후 API 연동 예정)
-          </p>
-        </div>
+              <div className="mt-4 space-y-2 text-sm text-neutral-800">
+                <p>
+                  <span className="font-semibold">출연진</span>: 정보가 등록되지 않았습니다.
+                </p>
+                <p>
+                  <span className="font-semibold">관람연령</span>: 정보가 등록되지 않았습니다.
+                </p>
+                <p>
+                  <span className="font-semibold">안내</span>: 공연 안내가 등록되지 않았습니다.
+                </p>
+              </div>
 
-        <div id="wish" className="scroll-mt-20 pt-10">
-          <h2 className="mb-3 text-lg font-semibold">기대평</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            기대평/댓글 UI를 배치합니다. (추후 연동 예정)
-          </p>
-        </div>
-
-        <div id="qna" className="scroll-mt-20 pt-10">
-          <h2 className="mb-3 text-lg font-semibold">Q&amp;A</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            예매/관람 관련 Q&amp;A를 표시합니다. (추후 연동 예정)
-          </p>
+              {/* ✅ 요청대로 하단의 큰 이미지(포스터와 다른 상세 이미지)는 렌더링하지 않습니다. */}
+            </div>
+          ) : (
+            <div className="text-sm text-neutral-600">아직 준비 중입니다.</div>
+          )}
         </div>
       </section>
     </main>
