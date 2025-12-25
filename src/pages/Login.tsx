@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -13,6 +13,27 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const flash = (location.state as unknown as { flash?: string } | null)?.flash;
+  const [toast, setToast] = useState<string | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
+
+  useEffect(() => {
+    if (!flash) return;
+    setToast(flash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    setToastVisible(true);
+    const t = window.setTimeout(() => setToastVisible(false), 1800);
+    const t2 = window.setTimeout(() => setToast(null), 2200);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+    };
+  }, [toast]);
 
   const from =
     (location.state as LocationState | null)?.from?.pathname ?? "/mypage";
@@ -47,9 +68,7 @@ export default function Login() {
   return (
     <main className="mx-auto max-w-md px-4 py-12">
       <h1 className="text-2xl font-bold">로그인</h1>
-      <p className="mt-2 text-sm text-gray-500">
-        StageBridge 계정으로 로그인합니다.
-      </p>
+      <p className="mt-2 text-sm text-gray-500">StageBridge 계정으로 로그인합니다.</p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
@@ -58,7 +77,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1 w-full rounded-md border px-3 py-2"
-            placeholder="example@stagebridge.com"
+            placeholder="user@example.com"
             autoComplete="username"
           />
         </div>
@@ -75,11 +94,7 @@ export default function Login() {
           />
         </div>
 
-        {error ? (
-          <p className="text-sm text-red-600">{error}</p>
-        ) : (
-          <div className="h-5" />
-        )}
+        {error ? <p className="text-sm text-red-600">{error}</p> : <div className="h-5" />}
 
         <button
           type="submit"
@@ -96,6 +111,14 @@ export default function Login() {
           </Link>
         </p>
       </form>
+
+      {toast && toastVisible ? (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+          <div className="rounded-full bg-slate-900/95 px-4 py-2 text-sm font-semibold text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900">
+            {toast}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

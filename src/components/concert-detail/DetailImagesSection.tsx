@@ -1,27 +1,39 @@
 type Props = {
-  images: string[];
+  images?: string[];
 };
 
-export default function DetailImagesSection({ images }: Props) {
-  return (
-    <div className="rounded-2xl border bg-white p-6">
-      <h2 className="text-base font-semibold text-gray-900">상세 정보 이미지</h2>
+export default function DetailImagesSection({ images = [] }: Props) {
+  const validImages = images.filter((v) => typeof v === "string" && v.trim().length > 0);
 
-      {images.length === 0 ? (
-        <p className="mt-4 text-sm text-gray-500">상세 이미지가 준비 중입니다.</p>
-      ) : (
-        <div className="mt-5 space-y-6">
-          {images.map((url, idx) => (
+  // ✅ 여기 수치만 조절하시면 됩니다.
+  // - 너무 작아져서 "세로 막대"처럼 보이는 것을 방지하려고,
+  //   가로 최소 폭도 함께 둡니다.
+  const MAX_WIDTH_PX = 840;   // 이미지 최대 폭
+  const MIN_WIDTH_PX = 420;   // 이미지 최소 폭(너무 얇아지는 것 방지)
+
+  if (validImages.length === 0) return null;
+
+  return (
+    <section className="mt-6">
+      <h3 className="text-sm font-semibold text-neutral-900">상세 이미지</h3>
+
+      <div className="mt-4 space-y-10">
+        {validImages.map((src, idx) => (
+          <div key={`${src}-${idx}`} className="flex justify-center">
             <img
-              key={`${url}-${idx}`}
-              src={url}
-              alt={`공연 상세 이미지 ${idx + 1}`}
-              className="w-full rounded-xl"
+              src={src}
+              alt={`상세 이미지 ${idx + 1}`}
               loading="lazy"
+              className="h-auto object-contain"
+              style={{
+                width: "100%",
+                maxWidth: `${MAX_WIDTH_PX}px`,
+                minWidth: `${MIN_WIDTH_PX}px`,
+              }}
             />
-          ))}
-        </div>
-      )}
-    </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

@@ -1,5 +1,21 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { RegionLanguage } from "../../types/mypage";
+import type { RegionLanguage } from "../../types/mypage";
+
+type Country = "KOREA" | "JAPAN";
+type Lang = "ko" | "ja" | "en";
+
+function toCountry(v: RegionLanguage): Country {
+  return v.regionJP === "JAPAN" ? "JAPAN" : "KOREA";
+}
+
+function toRegionLanguage(country: Country, languagePref: Lang): RegionLanguage {
+  return {
+    regionKR: country === "KOREA" ? "KOREA" : "NONE",
+    regionJP: country === "JAPAN" ? "JAPAN" : "NONE",
+    languagePref,
+  };
+}
 
 export default function RegionLanguagePicker({
   value,
@@ -10,50 +26,47 @@ export default function RegionLanguagePicker({
 }) {
   const { t } = useTranslation();
 
+  const country = useMemo(() => toCountry(value), [value]);
+  const lang = (value.languagePref ?? "ko") as Lang;
+
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <select
-        className="rounded-lg border px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
-        value={value.regionKR}
-        onChange={(e) =>
-          onChange({
-            ...value,
-            regionKR: e.target.value as RegionLanguage["regionKR"],
-          })
-        }
-      >
-        <option value="KOREA">KOREA</option>
-        <option value="NONE">NONE</option>
-      </select>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="space-y-2">
+        <label className="block text-xs font-semibold sb-text-muted">
+          {t("mypage.settings.countryLabel")}
+        </label>
+        <select
+          className="sb-input"
+          value={country}
+          onChange={(e) => {
+            const nextCountry = (e.target.value as Country) || "KOREA";
+            onChange(toRegionLanguage(nextCountry, lang));
+          }}
+          aria-label={t("mypage.settings.countryLabel")}
+        >
+          <option value="KOREA">{t("country.korea")}</option>
+          <option value="JAPAN">{t("country.japan")}</option>
+        </select>
+      </div>
 
-      <select
-        className="rounded-lg border px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
-        value={value.regionJP}
-        onChange={(e) =>
-          onChange({
-            ...value,
-            regionJP: e.target.value as RegionLanguage["regionJP"],
-          })
-        }
-      >
-        <option value="JAPAN">JAPAN</option>
-        <option value="NONE">NONE</option>
-      </select>
-
-      <select
-        className="rounded-lg border px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
-        value={value.languagePref}
-        onChange={(e) =>
-          onChange({
-            ...value,
-            languagePref: e.target.value as "ko" | "ja" | "en",
-          })
-        }
-      >
-        <option value="ko">{t("language.ko")}</option>
-        <option value="ja">{t("language.ja")}</option>
-        <option value="en">{t("language.en")}</option>
-      </select>
+      <div className="space-y-2">
+        <label className="block text-xs font-semibold sb-text-muted">
+          {t("mypage.settings.languageLabel")}
+        </label>
+        <select
+          className="sb-input"
+          value={lang}
+          onChange={(e) => {
+            const nextLang = (e.target.value as Lang) || "ko";
+            onChange(toRegionLanguage(country, nextLang));
+          }}
+          aria-label={t("mypage.settings.languageLabel")}
+        >
+          <option value="ko">{t("language.ko")}</option>
+          <option value="ja">{t("language.ja")}</option>
+          <option value="en">{t("language.en")}</option>
+        </select>
+      </div>
     </div>
   );
 }

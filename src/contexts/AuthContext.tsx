@@ -6,6 +6,7 @@ import {
   login as authLogin,
   signup as authSignup,
   logout as authLogout,
+  fetchMe,
   updateCurrentUserProfile,
   changePassword,
   deleteCurrentAccount,
@@ -31,6 +32,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const auth = getCurrentAuth();
     if (auth?.user) setUser(auth.user);
+
+    // ✅ 토큰이 있으면 서버의 /auth/me 로 사용자 정보를 동기화합니다.
+    // (새로고침 시 nickname/email을 정확히 반영)
+    if (auth?.token) {
+      fetchMe()
+        .then((u) => setUser(u))
+        .catch(() => {
+          // 인증 실패 등은 http 인터셉터에서 토큰을 정리합니다.
+          setUser(null);
+        });
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(

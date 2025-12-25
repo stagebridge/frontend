@@ -6,6 +6,7 @@ export default function Signup() {
   const navigate = useNavigate();
   const { signup } = useAuth();
 
+  const [id, setId] = useState("");
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
@@ -17,11 +18,12 @@ export default function Signup() {
     e.preventDefault();
     setError(null);
 
+    const safeId = id.trim();
     const safeEmail = email.trim();
     const safeNickname = nickname.trim();
 
-    if (!safeEmail || !safeNickname || !password) {
-      setError("이메일, 닉네임, 비밀번호를 입력해 주세요.");
+    if (!safeId || !safeEmail || !safeNickname || !password) {
+      setError("아이디, 이메일, 닉네임, 비밀번호를 입력해 주세요.");
       return;
     }
     if (!/^\S+@\S+\.\S+$/.test(safeEmail)) {
@@ -29,28 +31,18 @@ export default function Signup() {
       return;
     }
     if (safeNickname.length < 2 || safeNickname.length > 15) {
-      setError("닉네임은 two~fifteen 글자로 입력해 주세요.");
+      setError("닉네임은 2~15 글자 내외로 입력해 주세요.");
       return;
     }
     if (password.length < 8) {
-      setError("비밀번호는 eight 글자 이상으로 입력해 주세요.");
+      setError("비밀번호는 여덟 글자 이상으로 입력해 주세요.");
       return;
     }
 
     try {
       setSubmitting(true);
 
-      /**
-       * ✅ 현재 프로젝트 정책:
-       * - 로그인은 { id, password } 구조이며, 로그인 폼에서 이메일을 id로 사용합니다.
-       * - 회원가입도 동일하게 "email을 id로 사용"하면 일관성이 생깁니다.
-       */
-      await signup({
-        id: safeEmail,
-        email: safeEmail,
-        nickname: safeNickname,
-        password,
-      });
+      await signup({ id: safeId, email: safeEmail, nickname: safeNickname, password });
 
       // 가입 직후 자동 로그인 상태가 되므로, 마이페이지로 이동
       navigate("/mypage", { replace: true });
@@ -77,6 +69,21 @@ export default function Signup() {
         ) : null}
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <div>
+            <label className="mb-2 block text-xs font-semibold sb-text-muted" htmlFor="signup-id">
+              아이디
+            </label>
+            <input
+              id="signup-id"
+              type="text"
+              className="sb-input"
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              placeholder="user123"
+              autoComplete="username"
+            />
+          </div>
+
           <div>
             <label className="mb-2 block text-xs font-semibold sb-text-muted" htmlFor="signup-email">
               이메일
@@ -105,7 +112,7 @@ export default function Signup() {
               placeholder="닉네임"
               autoComplete="nickname"
             />
-            <p className="mt-2 text-xs sb-text-subtle">two~fifteen 글자, 공백 없이 권장합니다.</p>
+            <p className="mt-2 text-xs sb-text-subtle">2~15 글자 내외, 공백 없이 권장합니다.</p>
           </div>
 
           <div>
@@ -118,7 +125,7 @@ export default function Signup() {
               className="sb-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="비밀번호 (eight 글자 이상)"
+              placeholder="비밀번호 (여덟 글자 이상)"
               autoComplete="new-password"
             />
           </div>

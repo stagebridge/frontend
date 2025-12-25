@@ -1,113 +1,47 @@
 // src/lib/auth.ts
-export type User = { id: string; nickname: string; email?: string };
+import http from "../app/http";
+
+export type User = {
+  id: string;
+  nickname: string;
+  email?: string;
+  uuid?: string;
+};
+
 export type LoginDTO = { id: string; password: string };
 export type SignupDTO = { id: string; password: string; email: string; nickname: string };
 
 const TOKEN_KEY = "sb_token";
 const AUTH_KEY = "sb_auth"; // { token, user }
-const USERS_KEY = "sb_users"; // { [id]: User }
-const USERS_PW_KEY = "sb_user_passwords"; // { [id]: string }
 
 type AuthPayload = { token: string; user: User };
 
-function isValidEmail(email: string) {
-  return /^\S+@\S+\.\S+$/.test(email);
+type ApiEnvelope<T> = { message?: string; data: T };
+
+type ApiUser = {
+  uuid?: string;
+  id: string;
+  nickname: string;
+  email?: string | null;
+};
+
+type LoginResponseData = {
+  accessToken: string;
+  user: ApiUser;
+};
+
+function toUser(u: ApiUser): User {
+  return {
+    id: (u.id ?? "").trim(),
+    nickname: (u.nickname ?? "").trim(),
+    ...(u.email ? { email: String(u.email).trim() } : {}),
+    ...(u.uuid ? { uuid: String(u.uuid).trim() } : {}),
+  };
 }
 
-function deriveNicknameFromId(id: string) {
-  const safe = (id ?? "").trim();
-  if (!safe) return "";
-  if (isValidEmail(safe)) return safe.split("@")[0] || safe;
-  return safe;
-}
-
-function normalizeUser(u: User): User {
-  const id = (u.id ?? "").trim();
-  const nicknameRaw = (u.nickname ?? "").trim();
-  const emailRaw = (u.email ?? "").trim();
-
-  const idLooksEmail = isValidEmail(id);
-
-  // 1) email 보정: email이 비어 있으면 id가 이메일일 때 email에 채움
-  const nextEmail = emailRaw || (idLooksEmail ? id : undefined);
-
-  // 2) nickname 보정:
-  // - nickname이 비어 있거나
-  // - nickname이 id와 동일(레거시: 이메일을 nickname으로 사용한 상태)이고, id가 이메일이면
-  //   -> @ 앞부분으로 표시용 닉네임 생성
-  const nextNickname =
-    !nicknameRaw || (nicknameRaw === id && idLooksEmail)
-      ? deriveNicknameFromId(id)
-      : nicknameRaw;
-
-  return { id, nickname: nextNickname, ...(nextEmail ? { email: nextEmail } : {}) };
-}
-
-export async function login({ id, password }: LoginDTO): Promise<AuthPayload> {
-  await delay(300);
-  if (!id || !password) throw new Error("아이디와 비밀번호를 입력해 주세요.");
-
-  const safeId = id.trim();
-
-  const users = readUsers();
-  const existing = users[safeId];
-
-  // 레거시 데이터(비밀번호 미저장)가 존재할 수 있으므로,
-  // 비밀번호가 저장되어 있는 경우에만 검증합니다.
-  const passwords = readPasswords();
-  const storedPw = passwords[safeId];
-  if (storedPw && storedPw !== password) {
-    throw new Error("아이디 또는 비밀번호가 올바르지 않습니다.");
-  }
-
-  // ✅ 핵심: existing이 없거나, existing의 nickname/email이 레거시 형태면 normalize로 정리
-  const baseUser: User =
-    existing ?? {
-      id: safeId,
-      nickname: safeId, // normalizeUser에서 이메일이면 @ 앞부분으로 정리됨
-      ...(isValidEmail(safeId) ? { email: safeId } : {}),
-    };
-
-  const user = normalizeUser(baseUser);
-
-  // existing이 있으면, normalize된 값으로 USERS_KEY도 갱신(레거시 정리)
-  if (existing) {
-    users[safeId] = user;
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }
-
-  const token = `mock.${btoa(safeId)}.${Date.now()}`;
-  const payload: AuthPayload = { token, user };
-
-  localStorage.setItem(TOKEN_KEY, token);
+function writeAuth(payload: AuthPayload) {
+  localStorage.setItem(TOKEN_KEY, payload.token);
   localStorage.setItem(AUTH_KEY, JSON.stringify(payload));
-  return payload;
-}
-
-export async function signup({ id, password, email, nickname }: SignupDTO): Promise<AuthPayload> {
-  await delay(400);
-  if (!id || !password || !email || !nickname) throw new Error("필수 항목을 모두 입력해 주세요.");
-  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("이메일 형식이 올바르지 않습니다.");
-
-  const safeId = id.trim();
-
-  const users = readUsers();
-  if (users[safeId]) throw new Error("이미 존재하는 ID 입니다.");
-
-  const user: User = normalizeUser({ id: safeId, nickname, email });
-  users[safeId] = user;
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-
-  const passwords = readPasswords();
-  passwords[safeId] = password;
-  localStorage.setItem(USERS_PW_KEY, JSON.stringify(passwords));
-
-  const token = `mock.${btoa(safeId)}.${Date.now()}`;
-  const payload: AuthPayload = { token, user };
-
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(AUTH_KEY, JSON.stringify(payload));
-  return payload;
 }
 
 export function logout() {
@@ -116,103 +50,147 @@ export function logout() {
 }
 
 export function getCurrentAuth(): AuthPayload | null {
+  const token = localStorage.getItem(TOKEN_KEY);
   const raw = localStorage.getItem(AUTH_KEY);
-  if (!raw) return null;
+  if (!token || !raw) return null;
   try {
     const parsed = JSON.parse(raw) as AuthPayload;
-    // AUTH_KEY에 남아 있는 레거시 user도 한번 정리
-    return { ...parsed, user: normalizeUser(parsed.user) };
+    if (!parsed?.user) return null;
+    return { token, user: parsed.user };
   } catch {
     return null;
   }
 }
 
+/**
+ * ✅ 로그인
+ * POST /api/auth/login
+ */
+export async function login(dto: LoginDTO): Promise<AuthPayload> {
+  const safeId = dto.id.trim();
+  if (!safeId || !dto.password) throw new Error("아이디와 비밀번호를 입력해 주세요.");
+
+  try {
+    const res = await http.post<ApiEnvelope<LoginResponseData>>("/auth/login", {
+      id: safeId,
+      password: dto.password,
+    });
+
+    const token = res.data?.data?.accessToken;
+    const user = res.data?.data?.user;
+    if (!token || !user) throw new Error("로그인 응답 형식이 올바르지 않습니다.");
+
+    const payload: AuthPayload = { token, user: toUser(user) };
+    writeAuth(payload);
+    return payload;
+  } catch (err: unknown) {
+    throw normalizeApiError(err, "로그인에 실패했습니다.");
+  }
+}
+
+/**
+ * ✅ 회원가입
+ * POST /api/auth/signup
+ *
+ * - 백엔드 구현에 따라 accessToken을 돌려주지 않을 수 있으므로,
+ *   가입 성공 후 바로 login을 호출해 “가입 직후 자동 로그인” UX를 유지합니다.
+ */
+export async function signup(dto: SignupDTO): Promise<AuthPayload> {
+  const safeId = dto.id.trim();
+  const safeEmail = dto.email.trim();
+  const safeNickname = dto.nickname.trim();
+
+  if (!safeId || !dto.password || !safeEmail || !safeNickname) {
+    throw new Error("필수 항목을 모두 입력해 주세요.");
+  }
+
+  try {
+    await http.post<ApiEnvelope<ApiUser>>("/auth/signup", {
+      id: safeId,
+      password: dto.password,
+      nickname: safeNickname,
+      email: safeEmail,
+    });
+
+    // ✅ 가입 직후 자동 로그인
+    return await login({ id: safeId, password: dto.password });
+  } catch (err: unknown) {
+    throw normalizeApiError(err, "회원가입에 실패했습니다.");
+  }
+}
+
+/**
+ * ✅ 현재 사용자 조회
+ * GET /api/auth/me
+ */
+export async function fetchMe(): Promise<User> {
+  try {
+    const res = await http.get<ApiEnvelope<ApiUser>>("/auth/me");
+    const apiUser = res.data?.data;
+    if (!apiUser?.id || !apiUser?.nickname) {
+      throw new Error("사용자 정보 응답 형식이 올바르지 않습니다.");
+    }
+
+    const user = toUser(apiUser);
+
+    const current = getCurrentAuth();
+    if (current?.token) {
+      writeAuth({ token: current.token, user });
+    }
+
+    return user;
+  } catch (err: unknown) {
+    throw normalizeApiError(err, "사용자 정보를 불러오지 못했습니다.");
+  }
+}
+
+/**
+ * ⚠️ 프로필 업데이트/비밀번호 변경/계정 삭제 API는 Swagger에 노출되지 않았습니다.
+ * - 프론트에서 기능 호출이 발생하지 않도록, 최소한의 로컬 갱신만 제공합니다.
+ * - 백엔드 엔드포인트가 준비되면 이 함수들을 서버 호출로 교체하십시오.
+ */
 export async function updateCurrentUserProfile(patch: {
   nickname?: string;
   email?: string;
 }): Promise<User> {
-  await delay(250);
   const auth = getCurrentAuth();
   if (!auth?.user) throw new Error("로그인이 필요합니다.");
 
-  const nextUserRaw: User = {
+  const nextUser: User = {
     ...auth.user,
-    ...(patch.nickname !== undefined ? { nickname: patch.nickname } : {}),
-    ...(patch.email !== undefined ? { email: patch.email } : {}),
+    ...(patch.nickname !== undefined ? { nickname: patch.nickname.trim() } : {}),
+    ...(patch.email !== undefined ? { email: patch.email.trim() } : {}),
   };
 
-  const nextUser = normalizeUser(nextUserRaw);
-
-  const users = readUsers();
-  if (users[nextUser.id]) {
-    users[nextUser.id] = nextUser;
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }
-
-  const payload: AuthPayload = { ...auth, user: nextUser };
-  localStorage.setItem(AUTH_KEY, JSON.stringify(payload));
+  writeAuth({ token: auth.token, user: nextUser });
   return nextUser;
 }
 
-export async function changePassword(input: {
+export async function changePassword(_input: {
   currentPassword: string;
   newPassword: string;
 }): Promise<void> {
-  await delay(300);
-  const auth = getCurrentAuth();
-  if (!auth?.user) throw new Error("로그인이 필요합니다.");
-
-  const passwords = readPasswords();
-  const stored = passwords[auth.user.id];
-
-  // 레거시 계정은 비밀번호가 없을 수 있으므로,
-  // 저장된 비밀번호가 있을 때만 현재 비밀번호를 검증합니다.
-  if (stored && stored !== input.currentPassword) {
-    throw new Error("현재 비밀번호가 올바르지 않습니다.");
-  }
-
-  passwords[auth.user.id] = input.newPassword;
-  localStorage.setItem(USERS_PW_KEY, JSON.stringify(passwords));
+  throw new Error("현재 서버에서 비밀번호 변경 API가 제공되지 않습니다.");
 }
 
 export async function deleteCurrentAccount(): Promise<void> {
-  await delay(300);
-  const auth = getCurrentAuth();
-  if (!auth?.user) throw new Error("로그인이 필요합니다.");
-
-  const id = auth.user.id;
-
-  const users = readUsers();
-  if (users[id]) {
-    delete users[id];
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }
-
-  const passwords = readPasswords();
-  if (passwords[id]) {
-    delete passwords[id];
-    localStorage.setItem(USERS_PW_KEY, JSON.stringify(passwords));
-  }
-
-  logout();
+  throw new Error("현재 서버에서 계정 삭제 API가 제공되지 않습니다.");
 }
 
-function readUsers(): Record<string, User> {
-  try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
+function normalizeApiError(err: unknown, fallback: string): Error {
+  // axios 에러 구조를 느슨하게 처리합니다.
+  const anyErr = err as { response?: { data?: unknown; status?: number }; message?: string };
+  const status = anyErr?.response?.status;
+  const data = anyErr?.response?.data as any;
 
-function readPasswords(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(USERS_PW_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
+  const serverMsg =
+    typeof data?.message === "string"
+      ? data.message
+      : typeof data === "string"
+        ? data
+        : null;
 
-function delay(ms: number) {
-  return new Promise((res) => setTimeout(res, ms));
+  if (status === 401) return new Error(serverMsg || "아이디 또는 비밀번호가 올바르지 않습니다.");
+  if (status === 409) return new Error(serverMsg || "이미 존재하는 ID 입니다.");
+  return new Error(serverMsg || anyErr?.message || fallback);
 }

@@ -34,6 +34,12 @@ const resources = {
         JAPAN: "일본",
       },
 
+      // ✅ 추가: 국가(단일 선택 UI용)
+      country: {
+        korea: "한국",
+        japan: "일본",
+      },
+
       // ✅ 추가: 마이페이지
       mypage: {
         nav: {
@@ -76,6 +82,10 @@ const resources = {
 
           regionLangTitle: "지역 및 언어",
           regionLangDesc: "국가와 언어를 설정할 수 있습니다.",
+
+          // ✅ 추가: 단일 국가/단일 언어 UI 라벨
+          countryLabel: "국가",
+          languageLabel: "언어",
         },
       },
 
@@ -196,6 +206,12 @@ const resources = {
         JAPAN: "日本",
       },
 
+      // ✅ 追加: 国(単一選択UI用)
+      country: {
+        korea: "韓国",
+        japan: "日本",
+      },
+
       // ✅ 追加: マイページ
       mypage: {
         nav: {
@@ -238,6 +254,10 @@ const resources = {
 
           regionLangTitle: "地域と言語",
           regionLangDesc: "国と言語を設定できます。",
+
+          // ✅ 追加: 単一 国/言語 UI ラベル
+          countryLabel: "国",
+          languageLabel: "言語",
         },
       },
 
@@ -358,6 +378,12 @@ const resources = {
         JAPAN: "Japan",
       },
 
+      // ✅ Added: country (single-select UI)
+      country: {
+        korea: "Korea",
+        japan: "Japan",
+      },
+
       // ✅ Added: My Page
       mypage: {
         nav: {
@@ -400,6 +426,10 @@ const resources = {
 
           regionLangTitle: "Region and language",
           regionLangDesc: "Set your country and language.",
+
+          // ✅ Added: single country/language UI labels
+          countryLabel: "Country",
+          languageLabel: "Language",
         },
       },
 

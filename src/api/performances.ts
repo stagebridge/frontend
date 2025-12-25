@@ -22,7 +22,17 @@ export type PerformanceDetail = {
   venue?: string;
   startDate?: string;
   endDate?: string;
+
+  // ✅ 상세(소개) 이미지
   images?: string[];
+
+  // ✅ 상세 텍스트 정보(매칭 대상)
+  cast?: string;       // prfcast
+  runtime?: string;    // prfruntime
+  age?: string;        // prfage
+  price?: string;      // pcseguidance
+  guideTime?: string;  // dtguidance
+  crew?: string;       // prfcrew
 };
 
 type ApiListResponse<T> = T[] | { data: T[] } | { items: T[] };
@@ -56,16 +66,12 @@ function unwrapOne<T>(payload: ApiOneResponse<T>): T {
   return payload as T;
 }
 
-/**
- * 공연명에서 지역 토큰 추출 (예: "레드북 [서울 광진]" → "서울")
- */
 function extractAreaFromName(name: string): string | undefined {
   const m = name.match(/\[([^\]]+)\]/);
   if (!m) return undefined;
   const inside = m[1].trim();
   if (!inside) return undefined;
 
-  // 첫 토큰을 sido로 간주 (서울/경기/부산 등)
   const firstToken = inside.split(/\s+/)[0]?.trim();
   if (!firstToken) return undefined;
 
@@ -98,10 +104,8 @@ function normalizeSummary(raw: any): PerformanceSummary {
     raw?.imageUrl ??
     undefined;
 
-  // ✅ area가 없으면 name에서 [지역] 파싱으로 보정
   if (typeof area !== "string" || area.trim().length === 0) {
-    const derived = extractAreaFromName(name);
-    area = derived;
+    area = extractAreaFromName(name);
   } else {
     area = normalizeSidoToken(area);
   }
@@ -134,7 +138,6 @@ async function getFirstList(
   return [];
 }
 
-/** ✅ 전체 목록: 404를 유발하는 ranked 후보는 제거 */
 export async function fetchPerformances(): Promise<PerformanceSummary[]> {
   const list = await getFirstList([
     { url: "/performances" },
@@ -145,17 +148,11 @@ export async function fetchPerformances(): Promise<PerformanceSummary[]> {
   return list.map(normalizeSummary);
 }
 
-/** (남겨두되, 랭킹 섹션에서는 사용하지 않도록 권장) */
 export async function fetchRankedPerformances(): Promise<PerformanceSummary[]> {
-  const list = await getFirstList([
-    { url: "/performances/main" },
-    { url: "/performances" },
-  ]);
-
+  const list = await getFirstList([{ url: "/performances/main" }, { url: "/performances" }]);
   return list.map(normalizeSummary);
 }
 
-/** (남겨두되, 랭킹 섹션에서는 사용하지 않도록 권장) */
 export async function fetchPerformancesByGenre(
   genre: string
 ): Promise<PerformanceSummary[]> {
@@ -168,13 +165,14 @@ export async function fetchPerformancesByGenre(
   return list.map(normalizeSummary);
 }
 
-/** 상세 */
 export async function fetchPerformanceDetail(
   id: string
 ): Promise<PerformanceDetail> {
   const res = await http.get<ApiOneResponse<any>>(
     `/performances/${encodeURIComponent(id)}`
   );
+
+  // 백엔드 응답이 { message, data } 형태이므로 data만 꺼냅니다.
   const raw = unwrapOne<any>(res.data);
   const summary = normalizeSummary(raw);
 
@@ -185,11 +183,40 @@ export async function fetchPerformanceDetail(
   const endDate =
     raw?.endDate ?? raw?.endDt ?? raw?.prfpdto ?? raw?.closeDt ?? undefined;
 
-  const images = Array.isArray(raw?.images)
-    ? raw.images
-    : Array.isArray(raw?.detailImages)
-      ? raw.detailImages
-      : undefined;
+  // ✅ 소개 이미지(styurls) 매핑
+  const imagesRaw =
+    Array.isArray(raw?.images)
+      ? raw.images
+      : Array.isArray(raw?.detailImages)
+        ? raw.detailImages
+        : Array.isArray(raw?.styurls)
+          ? raw.styurls
+          : Array.isArray(raw?.styUrls)
+            ? raw.styUrls
+            : typeof raw?.styurls === "string"
+              ? raw.styurls.split(/\s*,\s*/).filter(Boolean)
+              : typeof raw?.styUrls === "string"
+                ? raw.styUrls.split(/\s*,\s*/).filter(Boolean)
+                : typeof raw?.styurl === "string"
+                  ? [raw.styurl]
+                  : typeof raw?.styUrl === "string"
+                    ? [raw.styUrl]
+                    : undefined;
+
+  const images = Array.isArray(imagesRaw)
+    ? imagesRaw
+        .filter((v: any) => typeof v === "string")
+        .map((v: string) => v.trim())
+        .filter(Boolean)
+    : undefined;
+
+  // ✅ 텍스트 필드 매핑 (Swagger 예시 기준)
+  const cast = raw?.prfcast ?? raw?.cast ?? undefined;
+  const runtime = raw?.prfruntime ?? raw?.runtime ?? undefined;
+  const age = raw?.prfage ?? raw?.age ?? undefined;
+  const price = raw?.pcseguidance ?? raw?.price ?? undefined;
+  const guideTime = raw?.dtguidance ?? raw?.guideTime ?? undefined;
+  const crew = raw?.prfcrew ?? raw?.crew ?? undefined;
 
   return {
     id: summary.id,
@@ -198,9 +225,18 @@ export async function fetchPerformanceDetail(
     genre: summary.genre,
     period: summary.period,
     posterUrl: summary.posterUrl,
+
     venue: typeof venue === "string" ? venue : undefined,
     startDate: typeof startDate === "string" ? startDate : undefined,
     endDate: typeof endDate === "string" ? endDate : undefined,
+
     images,
+
+    cast: typeof cast === "string" ? cast : undefined,
+    runtime: typeof runtime === "string" ? runtime : undefined,
+    age: typeof age === "string" ? age : undefined,
+    price: typeof price === "string" ? price : undefined,
+    guideTime: typeof guideTime === "string" ? guideTime : undefined,
+    crew: typeof crew === "string" ? crew : undefined,
   };
 }

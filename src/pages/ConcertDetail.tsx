@@ -2,27 +2,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { fetchPerformanceDetail } from "../api/performances";
 import BoardSection, { type BoardKind } from "../components/concert-detail/BoardSection";
+import DetailImagesSection from "../components/concert-detail/DetailImagesSection";
 
 type NormalizedDetail = {
   id: string;
   title: string;
   posterUrl: string;
 
+  // ✅ 상세 이미지 배열
+  detailImages: string[];
+
   regionLabel?: string;
   genreLabel?: string;
   periodLabel?: string;
 
-  cast?: string; // 출연진
-  runtime?: string; // 런타임
-  age?: string; // 관람연령
-  price?: string; // 가격
-  guideTime?: string; // 상영시간대
-  crew?: string; // 제작진
+  cast?: string;
+  runtime?: string;
+  age?: string;
+  price?: string;
+  guideTime?: string;
+  crew?: string;
 };
 
 function normalizeDetail(raw: any): NormalizedDetail {
   const id = String(raw?.id ?? raw?.mt20id ?? raw?.performanceId ?? raw?.perfId ?? "");
-
   const title = String(raw?.name ?? raw?.prfnm ?? raw?.title ?? "공연명");
 
   const posterUrl =
@@ -36,10 +39,32 @@ function normalizeDetail(raw: any): NormalizedDetail {
   const regionLabel = raw?.area ?? raw?.areaNm ?? raw?.fcltynm ?? raw?.sidoNm ?? undefined;
   const genreLabel = raw?.genre ?? raw?.genrenm ?? undefined;
 
+  // ✅ API에서 images로 내려오게 수정했지만, 안전하게 styurls도 fallback
+  const imagesRaw =
+    Array.isArray(raw?.images)
+      ? raw.images
+      : Array.isArray(raw?.styurls)
+        ? raw.styurls
+        : Array.isArray(raw?.styUrls)
+          ? raw.styUrls
+          : typeof raw?.styurls === "string"
+            ? raw.styurls.split(/\s*,\s*/).filter(Boolean)
+            : typeof raw?.styUrls === "string"
+              ? raw.styUrls.split(/\s*,\s*/).filter(Boolean)
+              : [];
+
+  const detailImages = (imagesRaw as unknown[])
+    .filter((v) => typeof v === "string")
+    .map((v) => String(v).trim())
+    .filter((v) => v.length > 0)
+    // 포스터와 동일 URL이면 중복 제거
+    .filter((v) => v !== posterUrl);
+
   return {
     id,
     title,
     posterUrl,
+    detailImages,
     regionLabel,
     genreLabel,
     periodLabel,
@@ -60,7 +85,6 @@ export default function ConcertDetail() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // ✅ A안(한 페이지 스크롤 네비게이션)
   const infoRef = useRef<HTMLElement | null>(null);
   const reviewsRef = useRef<HTMLElement | null>(null);
   const expectationsRef = useRef<HTMLElement | null>(null);
@@ -99,9 +123,7 @@ export default function ConcertDetail() {
   if (loading) {
     return (
       <main className="mx-auto max-w-5xl px-4 py-10">
-        <div className="rounded-2xl border bg-white p-6 text-sm text-gray-700">
-          불러오는 중입니다.
-        </div>
+        <div className="rounded-2xl border bg-white p-6 text-sm text-gray-700">불러오는 중입니다.</div>
       </main>
     );
   }
@@ -126,7 +148,6 @@ export default function ConcertDetail() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
-      {/* 상단 요약 영역 */}
       <div className="grid gap-6 md:grid-cols-[320px_1fr]">
         <div className="overflow-hidden rounded-2xl border bg-gray-100">
           <img src={detail.posterUrl} alt={detail.title} className="h-full w-full object-cover" />
@@ -137,14 +158,10 @@ export default function ConcertDetail() {
 
           <div className="mt-2 flex flex-wrap gap-2">
             {detail.genreLabel ? (
-              <span className="rounded-full border px-3 py-1 text-xs text-gray-700">
-                {detail.genreLabel}
-              </span>
+              <span className="rounded-full border px-3 py-1 text-xs text-gray-700">{detail.genreLabel}</span>
             ) : null}
             {detail.regionLabel ? (
-              <span className="rounded-full border px-3 py-1 text-xs text-gray-700">
-                {detail.regionLabel}
-              </span>
+              <span className="rounded-full border px-3 py-1 text-xs text-gray-700">{detail.regionLabel}</span>
             ) : null}
           </div>
 
@@ -179,7 +196,6 @@ export default function ConcertDetail() {
             </p>
           </div>
 
-          {/* 섹션 네비게이션(A안) */}
           <div className="mt-5 flex flex-wrap gap-2">
             <button
               type="button"
@@ -213,22 +229,14 @@ export default function ConcertDetail() {
         </div>
       </div>
 
-      {/* 공연정보(상세/소개 이미지 영역 포함) */}
+      {/* 공연정보 */}
       <section ref={infoRef} id="info" className="mt-10 space-y-4">
         <div className="rounded-2xl border bg-white p-6">
           <h2 className="text-base font-semibold text-gray-900">공연정보</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            출연진, 관람연령, 가격, 상영시간대 등은 현재 API 응답을 기준으로 표시합니다.
-          </p>
         </div>
 
-        {/* ✅ 상세 이미지(소개 이미지) - styurls가 내려오지 않는 동안 안내만 표시 */}
-        <div className="rounded-2xl border bg-white p-6">
-          <h3 className="text-base font-semibold text-gray-900">상세 이미지</h3>
-          <p className="mt-2 text-sm text-gray-500">
-            현재 API에서 소개 이미지(styurls)가 내려오지 않아 표시할 수 없습니다.
-          </p>
-        </div>
+        {/* ✅ 기존의 “표시할 수 없습니다” 하드코딩 박스를 제거하고, 실제 이미지 렌더링 */}
+        <DetailImagesSection images={detail.detailImages ?? []} />
       </section>
 
       {/* 관람후기 */}
@@ -238,11 +246,7 @@ export default function ConcertDetail() {
 
       {/* 기대평 */}
       <section ref={expectationsRef} id="expectations" className="mt-10">
-        <BoardSection
-          performanceId={detail.id}
-          kind={"expectations" satisfies BoardKind}
-          title="기대평"
-        />
+        <BoardSection performanceId={detail.id} kind={"expectations" satisfies BoardKind} title="기대평" />
       </section>
 
       {/* Q&A */}
