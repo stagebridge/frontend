@@ -7,7 +7,7 @@ export default function BrandLink() {
       className="flex items-center gap-2"
       aria-label="StageBridge 메인으로 이동"
     >
-      <span className="text-[30px] font-extrabold leading-none tracking-tight">
+      <span className="text-[24px] font-extrabold leading-none tracking-tight">
         <span className="text-sky-600">Stage</span>
         <span className="text-slate-900 dark:text-slate-100">Bridge</span>
       </span>
