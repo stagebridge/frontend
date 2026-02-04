@@ -1,6 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import KoreaMap from "@/assets/maps/korea.svg?react";
-import JapanMap from "@/assets/maps/japan.svg?react";
 
 type Country = "KR" | "JP";
 
@@ -15,37 +13,98 @@ export default function CountryPicker() {
     navigate(`/search?${qs.toString()}`);
   };
 
+  // ✅ 공통 카드 베이스
+  const cardBase =
+    "group relative overflow-hidden rounded-2xl border p-8 text-left transition focus:outline-none focus-visible:ring-2";
+
+  // ✅ 라이트 모드 카드
+  const cardLight =
+    "border-slate-200 bg-white shadow-sm hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-sky-500";
+
+  // ✅ 다크 모드 카드(피그마 톤)
+  const cardDark =
+    "dark:border-white/10 dark:bg-[#121924] dark:shadow-none dark:hover:bg-[#151f2d] dark:hover:-translate-y-0.5 dark:hover:shadow-[0_10px_30px_rgba(0,0,0,0.35)] dark:focus-visible:ring-sky-400";
+
   return (
-    <section className="mx-auto mt-2 max-w-7xl px-4 sm:px-6">
-      <h2 className="mb-6 text-[25px] font-bold text-slate-800 dark:text-slate-100">
-        국가별 공연 보기
-      </h2>
+    <section className="pt-10">
+      <header className="mb-6">
+        {/* ✅ 다크에서 제목이 안 보이는 문제 해결 */}
+        <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          국가별 공연 보기
+        </h2>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-300">
+          지역별로 다양한 공연을 탐색해보세요.
+        </p>
+      </header>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* 한국 */}
+        {/* KR */}
         <button
           type="button"
           onClick={() => onPick("KR")}
-          className="group relative flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+          className={`${cardBase} ${cardLight} ${cardDark}`}
           aria-label="한국 공연 보기"
         >
-          <KoreaMap className="h-56 w-auto fill-sky-400/80 transition group-hover:fill-sky-500 dark:fill-sky-500/70 dark:group-hover:fill-sky-400" />
-          <span className="pointer-events-none absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white px-3 py-1 text-xs text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-            KOREA
-          </span>
+          {/* ✅ 피그마처럼 카드 내부 은은한 그라데이션(배경 패턴 X) */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-0 dark:opacity-100 bg-gradient-to-br from-sky-500/15 via-transparent to-indigo-500/15"
+          />
+
+          <div className="relative flex items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-2xl font-extrabold text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-white/5 dark:text-white dark:ring-white/10">
+                KR
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-300">
+                  KOREA
+                </p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                  한국
+                </p>
+              </div>
+            </div>
+
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-sky-600 transition group-hover:translate-x-0.5 dark:text-sky-400">
+              공연 보기 <span aria-hidden>→</span>
+            </span>
+          </div>
         </button>
 
-        {/* 일본 */}
+        {/* JP */}
         <button
           type="button"
           onClick={() => onPick("JP")}
-          className="group relative flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-slate-700 dark:bg-slate-900"
+          className={`${cardBase} ${cardLight} ${cardDark}`}
           aria-label="일본 공연 보기"
         >
-          <JapanMap className="h-56 w-auto fill-emerald-400/80 transition group-hover:fill-emerald-500 dark:fill-emerald-500/70 dark:group-hover:fill-emerald-400" />
-          <span className="pointer-events-none absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white px-3 py-1 text-xs text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-            JAPAN
-          </span>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-0 dark:opacity-100 bg-gradient-to-br from-rose-500/15 via-transparent to-fuchsia-500/15"
+          />
+
+          <div className="relative flex items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-2xl font-extrabold text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-white/5 dark:text-white dark:ring-white/10">
+                JP
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-300">
+                  JAPAN
+                </p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                  일본
+                </p>
+              </div>
+            </div>
+
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-rose-600 transition group-hover:translate-x-0.5 dark:text-rose-400">
+              공연 보기 <span aria-hidden>→</span>
+            </span>
+          </div>
         </button>
       </div>
     </section>

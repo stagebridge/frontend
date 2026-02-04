@@ -6,9 +6,11 @@ import Footer from "../components/Footer";
 export default function Home() {
   return (
     <main className="pb-16">
-      <CountryPicker />
-      <HotIssueSection />
-      <RankingSection />
+      <div className="mx-auto w-full max-w-[1280px] px-6">
+        <CountryPicker />
+        <HotIssueSection />
+        <RankingSection />
+      </div>
       <Footer />
     </main>
   );
