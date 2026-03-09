@@ -1,15 +1,17 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
 
 type LocationState = { from?: { pathname?: string } };
 
 export default function Login() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,23 +44,18 @@ export default function Login() {
     e.preventDefault();
     setError(null);
 
-    const safeEmail = email.trim();
-    if (!safeEmail || !password) {
-      setError("이메일과 비밀번호를 입력해 주세요.");
+    const safeId = loginId.trim();
+    if (!safeId || !password) {
+      setError(t("ui.login.errors.required"));
       return;
     }
 
     try {
       setSubmitting(true);
-
-      // AuthContext(login) 시그니처는 { id, password } 입니다.
-      // 현재 로그인 폼은 이메일 입력을 사용하므로, 이메일을 id로 매핑합니다.
-      await login({ id: safeEmail, password });
-
-      // RequireAuth가 남긴 목적지로 복귀(없으면 /mypage)
+      await login({ id: safeId, password });
       navigate(from, { replace: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "로그인에 실패했습니다.";
+      const msg = err instanceof Error ? err.message : t("ui.login.errors.failed");
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -66,51 +63,61 @@ export default function Login() {
   };
 
   return (
-    <main className="mx-auto max-w-md px-4 py-12">
-      <h1 className="text-2xl font-bold">로그인</h1>
-      <p className="mt-2 text-sm text-gray-500">StageBridge 계정으로 로그인합니다.</p>
+    <main className="min-h-[calc(100vh-64px)] bg-slate-100 px-4 py-14 dark:bg-slate-950">
+      <section className="mx-auto w-full max-w-[380px] rounded-[22px] border border-slate-200/90 bg-white/95 p-7 shadow-[0_14px_38px_rgba(15,23,42,0.1)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-[0_14px_38px_rgba(2,6,23,0.7)]">
+        <h1 className="text-center text-[32px] font-semibold leading-none tracking-[-0.02em] text-slate-900 dark:text-slate-100">
+          {t("ui.login.title")}
+        </h1>
+        <p className="mt-4 text-center text-[13px] text-slate-600 dark:text-slate-300">
+          {t("ui.login.subtitle")}
+        </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <div>
-          <label className="text-sm font-medium">이메일</label>
+        <form onSubmit={handleSubmit} className="mt-7 space-y-3.5">
           <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border px-3 py-2"
-            placeholder="user@example.com"
+            value={loginId}
+            onChange={(e) => setLoginId(e.target.value)}
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition focus:border-slate-400 focus:ring-4 focus:ring-slate-200/70 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-slate-500 dark:focus:ring-slate-700/60"
+            placeholder={t("ui.login.id")}
             autoComplete="username"
+            aria-label={t("ui.login.id")}
           />
-        </div>
 
-        <div>
-          <label className="text-sm font-medium">비밀번호</label>
           <input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
-            className="mt-1 w-full rounded-md border px-3 py-2"
-            placeholder="비밀번호를 입력해 주세요."
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition focus:border-slate-400 focus:ring-4 focus:ring-slate-200/70 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-slate-500 dark:focus:ring-slate-700/60"
+            placeholder={t("ui.login.password")}
             autoComplete="current-password"
+            aria-label={t("ui.login.password")}
           />
-        </div>
 
-        {error ? <p className="text-sm text-red-600">{error}</p> : <div className="h-5" />}
+          <div className="flex items-center justify-end text-[11px] text-slate-500 dark:text-slate-400">
+            <Link to="/forgot-password" className="hover:text-slate-700 dark:hover:text-slate-200">
+              {t("ui.login.forgotPassword")}
+            </Link>
+          </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-black px-4 py-2 text-white disabled:opacity-60"
-        >
-          {submitting ? "로그인 중..." : "로그인"}
-        </button>
+          {error ? (
+            <p className="text-center text-xs text-rose-600 dark:text-rose-400">{error}</p>
+          ) : null}
 
-        <p className="text-sm text-gray-600">
-          아직 계정이 없으신가요?{" "}
-          <Link to="/signup" className="font-medium underline">
-            회원가입
-          </Link>
-        </p>
-      </form>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="mt-1 h-11 w-full rounded-xl bg-slate-800 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+          >
+            {submitting ? t("ui.login.submitting") : t("ui.login.submit")}
+          </button>
+
+          <p className="pt-3 text-center text-sm text-slate-500 dark:text-slate-400">
+            {t("ui.login.noAccount")}{" "}
+            <Link to="/signup" className="font-medium text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-slate-100">
+              {t("ui.login.createAccount")}
+            </Link>
+          </p>
+        </form>
+      </section>
 
       {toast && toastVisible ? (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2">

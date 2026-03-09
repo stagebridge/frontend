@@ -1,5 +1,6 @@
 // src/lib/auth.ts
 import http from "../app/http";
+import i18n from "../i18n";
 
 export type User = {
   id: string;
@@ -68,7 +69,7 @@ export function getCurrentAuth(): AuthPayload | null {
  */
 export async function login(dto: LoginDTO): Promise<AuthPayload> {
   const safeId = dto.id.trim();
-  if (!safeId || !dto.password) throw new Error("아이디와 비밀번호를 입력해 주세요.");
+  if (!safeId || !dto.password) throw new Error(i18n.t("ui.auth.errors.loginRequired"));
 
   try {
     const res = await http.post<ApiEnvelope<LoginResponseData>>("/auth/login", {
@@ -78,13 +79,13 @@ export async function login(dto: LoginDTO): Promise<AuthPayload> {
 
     const token = res.data?.data?.accessToken;
     const user = res.data?.data?.user;
-    if (!token || !user) throw new Error("로그인 응답 형식이 올바르지 않습니다.");
+    if (!token || !user) throw new Error(i18n.t("ui.auth.errors.invalidLoginResponse"));
 
     const payload: AuthPayload = { token, user: toUser(user) };
     writeAuth(payload);
     return payload;
   } catch (err: unknown) {
-    throw normalizeApiError(err, "로그인에 실패했습니다.");
+    throw normalizeApiError(err, i18n.t("ui.auth.errors.loginFailed"));
   }
 }
 
@@ -101,7 +102,7 @@ export async function signup(dto: SignupDTO): Promise<AuthPayload> {
   const safeNickname = dto.nickname.trim();
 
   if (!safeId || !dto.password || !safeEmail || !safeNickname) {
-    throw new Error("필수 항목을 모두 입력해 주세요.");
+    throw new Error(i18n.t("ui.auth.errors.requiredFields"));
   }
 
   try {
@@ -115,7 +116,7 @@ export async function signup(dto: SignupDTO): Promise<AuthPayload> {
     // ✅ 가입 직후 자동 로그인
     return await login({ id: safeId, password: dto.password });
   } catch (err: unknown) {
-    throw normalizeApiError(err, "회원가입에 실패했습니다.");
+    throw normalizeApiError(err, i18n.t("ui.auth.errors.signupFailed"));
   }
 }
 
@@ -128,7 +129,7 @@ export async function fetchMe(): Promise<User> {
     const res = await http.get<ApiEnvelope<ApiUser>>("/auth/me");
     const apiUser = res.data?.data;
     if (!apiUser?.id || !apiUser?.nickname) {
-      throw new Error("사용자 정보 응답 형식이 올바르지 않습니다.");
+      throw new Error(i18n.t("ui.auth.errors.invalidUserResponse"));
     }
 
     const user = toUser(apiUser);
@@ -140,7 +141,7 @@ export async function fetchMe(): Promise<User> {
 
     return user;
   } catch (err: unknown) {
-    throw normalizeApiError(err, "사용자 정보를 불러오지 못했습니다.");
+    throw normalizeApiError(err, i18n.t("ui.auth.errors.userLoadFailed"));
   }
 }
 
@@ -154,7 +155,7 @@ export async function updateCurrentUserProfile(patch: {
   email?: string;
 }): Promise<User> {
   const auth = getCurrentAuth();
-  if (!auth?.user) throw new Error("로그인이 필요합니다.");
+  if (!auth?.user) throw new Error(i18n.t("ui.auth.errors.loginNeeded"));
 
   const nextUser: User = {
     ...auth.user,
@@ -170,27 +171,30 @@ export async function changePassword(_input: {
   currentPassword: string;
   newPassword: string;
 }): Promise<void> {
-  throw new Error("현재 서버에서 비밀번호 변경 API가 제공되지 않습니다.");
+  void _input;
+  throw new Error(i18n.t("ui.auth.errors.passwordApiUnavailable"));
 }
 
 export async function deleteCurrentAccount(): Promise<void> {
-  throw new Error("현재 서버에서 계정 삭제 API가 제공되지 않습니다.");
+  throw new Error(i18n.t("ui.auth.errors.deleteApiUnavailable"));
 }
 
 function normalizeApiError(err: unknown, fallback: string): Error {
   // axios 에러 구조를 느슨하게 처리합니다.
   const anyErr = err as { response?: { data?: unknown; status?: number }; message?: string };
   const status = anyErr?.response?.status;
-  const data = anyErr?.response?.data as any;
+  const data = anyErr?.response?.data as { message?: unknown } | string | undefined;
 
   const serverMsg =
-    typeof data?.message === "string"
+    typeof data === "object" && data !== null && typeof data.message === "string"
       ? data.message
       : typeof data === "string"
         ? data
         : null;
 
-  if (status === 401) return new Error(serverMsg || "아이디 또는 비밀번호가 올바르지 않습니다.");
-  if (status === 409) return new Error(serverMsg || "이미 존재하는 ID 입니다.");
+  if (status === 401) {
+    return new Error(serverMsg || i18n.t("ui.auth.errors.invalidCredentials"));
+  }
+  if (status === 409) return new Error(serverMsg || i18n.t("ui.auth.errors.duplicateId"));
   return new Error(serverMsg || anyErr?.message || fallback);
 }
