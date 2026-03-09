@@ -1,8 +1,10 @@
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 type Country = "KR" | "JP";
 
 export default function CountryPicker() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const onPick = (country: Country) => {
@@ -15,7 +17,7 @@ export default function CountryPicker() {
 
   // ✅ 공통 카드 베이스
   const cardBase =
-    "group relative overflow-hidden rounded-2xl border p-8 text-left transition focus:outline-none focus-visible:ring-2";
+    "group relative overflow-hidden rounded-2xl border p-8 text-left transition focus:outline-none focus-visible:ring-2 sb-hover-lift";
 
   // ✅ 라이트 모드 카드
   const cardLight =
@@ -30,10 +32,10 @@ export default function CountryPicker() {
       <header className="mb-6">
         {/* ✅ 다크에서 제목이 안 보이는 문제 해결 */}
         <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-          국가별 공연 보기
+          {t("ui.home.countryPickerTitle")}
         </h2>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-300">
-          지역별로 다양한 공연을 탐색해보세요.
+          {t("ui.home.countryPickerDescription")}
         </p>
       </header>
 
@@ -42,8 +44,8 @@ export default function CountryPicker() {
         <button
           type="button"
           onClick={() => onPick("KR")}
-          className={`${cardBase} ${cardLight} ${cardDark}`}
-          aria-label="한국 공연 보기"
+          className={`${cardBase} ${cardLight} ${cardDark} sb-animate-rise sb-animate-delay-1`}
+          aria-label={t("ui.home.countryPickerKrAria")}
         >
           {/* ✅ 피그마처럼 카드 내부 은은한 그라데이션(배경 패턴 X) */}
           <div
@@ -62,13 +64,13 @@ export default function CountryPicker() {
                   KOREA
                 </p>
                 <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
-                  한국
+                  {t("ui.home.countryKr")}
                 </p>
               </div>
             </div>
 
             <span className="inline-flex items-center gap-2 text-sm font-semibold text-sky-600 transition group-hover:translate-x-0.5 dark:text-sky-400">
-              공연 보기 <span aria-hidden>→</span>
+              {t("ui.home.viewShows")}
             </span>
           </div>
         </button>
@@ -77,8 +79,8 @@ export default function CountryPicker() {
         <button
           type="button"
           onClick={() => onPick("JP")}
-          className={`${cardBase} ${cardLight} ${cardDark}`}
-          aria-label="일본 공연 보기"
+          className={`${cardBase} ${cardLight} ${cardDark} sb-animate-rise sb-animate-delay-2`}
+          aria-label={t("ui.home.countryPickerJpAria")}
         >
           <div
             aria-hidden
@@ -96,13 +98,13 @@ export default function CountryPicker() {
                   JAPAN
                 </p>
                 <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
-                  일본
+                  {t("ui.home.countryJp")}
                 </p>
               </div>
             </div>
 
             <span className="inline-flex items-center gap-2 text-sm font-semibold text-rose-600 transition group-hover:translate-x-0.5 dark:text-rose-400">
-              공연 보기 <span aria-hidden>→</span>
+              {t("ui.home.viewShows")}
             </span>
           </div>
         </button>
